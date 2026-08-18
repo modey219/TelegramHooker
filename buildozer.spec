@@ -6,13 +6,17 @@ package.domain = com.aseqx12
 source.dir = .
 source.main = main.py
 source.include_exts = py,png,jpg,kv,atlas
+source.include_patterns = icon.png
 
-version = 1.0.0
+version = 2.0.0
 
-requirements = python3,kivy,pyrogram,py-tgcalls==2.2.0,ntgcalls==2.2.5,aiohttp,pyaes,tgcrypto,certifi
+requirements = python3,kivy,pyrogram,py-tgcalls==2.2.0,ntgcalls==2.2.5,aiohttp,pyaes,tgcrypto,certifi,cryptography,urllib3
 
 orientation = portrait
 fullscreen = 0
+
+icon.filename = %(source.dir)s/icon.png
+presplash.filename = %(source.dir)s/icon.png
 
 android.api = 34
 android.minapi = 24
@@ -20,14 +24,20 @@ android.ndk = 25b
 android.archs = arm64-v8a
 android.accept_sdk_license = True
 
-android.permissions = INTERNET,RECORD_AUDIO,MODIFY_AUDIO_SETTINGS,ACCESS_NETWORK_STATE,WAKE_LOCK
+android.permissions = INTERNET,RECORD_AUDIO,MODIFY_AUDIO_SETTINGS,ACCESS_NETWORK_STATE,WAKE_LOCK,FOREGROUND_SERVICE,POST_NOTIFICATIONS,RECEIVE_BOOT_COMPLETED
 
 android.debug_artifact = apk
 
-log_level = 2
+android.gradle_dependencies = com.google.android.material:material:1.11.0
 
 p4a.branch = develop
 android.enable_androidx = True
+
+android.service = true
+
+proguard = True
+
+log_level = 2
 
 [buildozer]
 warn_on_root = 0
