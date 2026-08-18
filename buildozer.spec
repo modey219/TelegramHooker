@@ -6,7 +6,6 @@ package.domain = com.aseqx12
 source.dir = .
 source.main = main.py
 source.include_exts = py,png,jpg,kv,atlas
-source.exclude_patterns = .git*,.github*,terminal*,src*,ios*,android*,libs*,buildozer*,README*,LICENSE*,setup*,requirements*
 
 version = 1.0.0
 
@@ -23,7 +22,6 @@ android.accept_sdk_license = True
 
 android.permissions = INTERNET,RECORD_AUDIO,MODIFY_AUDIO_SETTINGS,ACCESS_NETWORK_STATE,WAKE_LOCK
 
-android.release_artifact = aab
 android.debug_artifact = apk
 
 log_level = 2

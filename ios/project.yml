@@ -3,26 +3,19 @@ options:
   bundleIdPrefix: com.aseqx12
   deploymentTarget:
     iOS: "15.0"
-  xcodeVersion: "15.0"
-  generateEmptyDirectories: true
-
-settings:
-  base:
-    SWIFT_VERSION: "5.0"
-    TARGETED_DEVICE_FAMILY: "1,2"
-    INFOPLIST_FILE: TelegramHooker/Info.plist
-    CODE_SIGN_STYLE: Automatic
-    PRODUCT_BUNDLE_IDENTIFIER: com.aseqx12.telegramhooker
+  createIntermediateGroups: true
 
 targets:
   TelegramHooker:
     type: application
     platform: iOS
     sources:
-      - path: TelegramHooker
-        type: group
+      - TelegramHooker
     settings:
       base:
-        GENERATE_INFOPLIST_FILE: false
-    info:
-      path: TelegramHooker/Info.plist
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        INFOPLIST_FILE: TelegramHooker/Info.plist
+        CODE_SIGN_STYLE: Automatic
+        PRODUCT_BUNDLE_IDENTIFIER: com.aseqx12.telegramhooker
+        ENABLE_BITCODE: NO

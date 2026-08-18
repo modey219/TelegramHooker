@@ -23,21 +23,29 @@ jobs:
       - name: Install xcodegen
         run: brew install xcodegen
 
-      - name: Generate Xcode Project
+      - name: Verify project structure
         run: |
-          cd ios
-          xcodegen generate --spec project.yml
-          echo "Generated project:"
-          ls -la TelegramHooker.xcodeproj/
+          echo "=== ios/ contents ==="
+          ls -laR ios/
+          echo "=== project.yml ==="
+          cat ios/project.yml
+          echo "=== Swift files ==="
+          find ios/ -name "*.swift" -type f
+          echo "=== Info.plist ==="
+          cat ios/TelegramHooker/Info.plist 2>/dev/null || echo "MISSING"
 
-      - name: Show schemes
+      - name: Generate Xcode Project
+        working-directory: ios
         run: |
-          cd ios
+          xcodegen generate --spec project.yml --verbose
+          echo "=== Generated ==="
+          ls -la TelegramHooker.xcodeproj/
           xcodebuild -project TelegramHooker.xcodeproj -list
 
-      - name: Build iOS (No Code Sign)
+      - name: Build iOS
+        working-directory: ios
         run: |
-          cd ios
+          set -o pipefail
           xcodebuild build \
             -project TelegramHooker.xcodeproj \
             -scheme TelegramHooker \
@@ -63,10 +71,10 @@ jobs:
             zip -r -y TelegramHooker-iOS.ipa Payload
             echo "IPA: $(du -h TelegramHooker-iOS.ipa | cut -f1)"
           else
-            echo "=== BUILD LOG (last 80 lines) ==="
-            tail -80 ios/build.log 2>/dev/null || true
+            echo "=== BUILD LOG (last 100 lines) ==="
+            tail -100 ios/build.log 2>/dev/null || true
             echo "=== Build products ==="
-            find ios/build -type f 2>/dev/null | head -20
+            find ios/build -type f 2>/dev/null | head -30
             exit 1
           fi
 

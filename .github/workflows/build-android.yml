@@ -36,10 +36,10 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Android SDK + NDK
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Cache Buildozer global
+      - name: Cache Buildozer
         uses: actions/cache@v4
         with:
           path: ~/.buildozer
@@ -52,25 +52,35 @@ jobs:
           pip install --upgrade pip setuptools wheel
           pip install buildozer cython virtualenv
 
-      - name: Build APK
+      - name: Show buildozer config
         run: |
-          buildozer --verbose android debug 2>&1 | tee build.log
-        timeout-minutes: 150
+          echo "=== buildozer.spec ==="
+          cat buildozer.spec
+          echo "=== main.py exists? ==="
+          ls -la main.py
+
+      - name: Build APK
+        run: buildozer --verbose android debug 2>&1 | tee build.log
 
       - name: Find APK
         id: find_apk
         run: |
-          APK=$(find . -name "*.apk" 2>/dev/null | head -1)
+          echo "=== Searching for APK ==="
+          find . -name "*.apk" -exec ls -lh {} \; 2>/dev/null || true
+          APK=$(find . -name "*.apk" -not -path "./.buildozer/*" 2>/dev/null | head -1)
+          if [ -z "$APK" ]; then
+            APK=$(find .buildozer -name "*.apk" 2>/dev/null | head -1)
+          fi
           if [ -n "$APK" ]; then
+            echo "Found: $APK ($(du -h "$APK" | cut -f1))"
             cp "$APK" ./TelegramHooker.apk
             echo "found=true" >> $GITHUB_OUTPUT
-            echo "APK: $APK ($(du -h "$APK" | cut -f1))"
           else
+            echo "NO APK FOUND"
+            ls -laR bin/ 2>/dev/null || echo "No bin/ dir"
+            echo "=== Last 100 lines of build log ==="
+            tail -100 build.log 2>/dev/null || true
             echo "found=false" >> $GITHUB_OUTPUT
-            echo "=== BUILD LOG (last 50 lines) ==="
-            tail -50 build.log 2>/dev/null || true
-            echo "=== .buildozer contents ==="
-            ls -la .buildozer/ 2>/dev/null || true
           fi
 
       - name: Upload APK
