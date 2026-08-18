@@ -19,9 +19,7 @@ android.archs = arm64-v8a
 android.accept_sdk_license = True
 android.permissions = INTERNET,RECORD_AUDIO,MODIFY_AUDIO_SETTINGS,ACCESS_NETWORK_STATE,WAKE_LOCK,FOREGROUND_SERVICE,POST_NOTIFICATIONS
 android.debug_artifact = apk
-android.gradle_dependencies = com.google.android.material:material:1.11.0
 android.enable_androidx = True
-proguard = True
 log_level = 2
 p4a.branch = develop
 [buildozer]

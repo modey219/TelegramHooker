@@ -43,38 +43,45 @@ jobs:
           path: |
             ~/.buildozer
             ~/.android
-          key: buildozer-v2-${{ hashFiles('buildozer.spec') }}-${{ github.run_id }}
+          key: buildozer-v3-${{ hashFiles('buildozer.spec') }}-${{ github.run_id }}
           restore-keys: |
-            buildozer-v2-${{ hashFiles('buildozer.spec') }}-
-            buildozer-v2-
+            buildozer-v3-${{ hashFiles('buildozer.spec') }}-
+            buildozer-v3-
 
       - name: Install Buildozer
         run: pip install buildozer cython
 
       - name: Build APK
         run: |
-          set +e
           buildozer android debug 2>&1 | tee build.log
-          EXIT=${PIPESTATUS[0]}
-          echo "=== Exit: $EXIT ==="
-          echo "=== Last 40 lines ==="
-          tail -40 build.log
-          echo "=== APK search ==="
-          find . -name "*.apk" -exec ls -lh {} \;
-          ls -laR bin/ 2>/dev/null || true
-          exit $EXIT
+          echo ${PIPESTATUS[0]} > build_exit.txt
+
+      - name: Upload build log on failure
+        if: failure() || steps.build.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          retention-days: 5
 
       - name: Find & Upload APK
         id: upload_apk
         if: success()
         run: |
+          EXIT=$(cat build_exit.txt 2>/dev/null || echo "1")
+          echo "Buildozer exit: $EXIT"
+          if [ "$EXIT" != "0" ]; then
+            echo "Buildozer failed, see log above"
+            echo "found=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
           APK=$(find . -name "*.apk" -size +1M 2>/dev/null | head -1)
           if [ -n "$APK" ]; then
             cp "$APK" ./TelegramHooker.apk
             echo "found=true" >> $GITHUB_OUTPUT
-            echo "OK: $APK ($(du -h TelegramHooker.apk | cut -f1))"
           else
             echo "NO APK FOUND"
+            find . -name "*.apk" -exec ls -lh {} \; 2>/dev/null || true
             echo "found=false" >> $GITHUB_OUTPUT
           fi
 
