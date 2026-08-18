@@ -4,8 +4,6 @@ on:
   push:
     branches: [main]
     tags: ['v*']
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -26,49 +24,51 @@ jobs:
         run: brew install xcodegen
 
       - name: Generate Xcode Project
-        working-directory: ios
         run: |
-          xcodegen generate
-          ls -la *.xcodeproj
+          cd ios
+          xcodegen generate --spec project.yml
+          echo "Generated project:"
+          ls -la TelegramHooker.xcodeproj/
 
-      - name: List available SDKs
-        run: xcodebuild -showsdks
-
-      - name: Build for device
-        working-directory: ios
+      - name: Show schemes
         run: |
+          cd ios
+          xcodebuild -project TelegramHooker.xcodeproj -list
+
+      - name: Build iOS (No Code Sign)
+        run: |
+          cd ios
           xcodebuild build \
             -project TelegramHooker.xcodeproj \
             -scheme TelegramHooker \
             -configuration Release \
             -destination "generic/platform=iOS" \
             -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
             ENABLE_BITCODE=NO \
-            | xcpretty --color || true
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            2>&1 | tee build.log
 
       - name: Package IPA
-        working-directory: ios
         run: |
+          cd ios
           mkdir -p Payload
-          APP_PATH=$(find build -name "TelegramHooker.app" -type d 2>/dev/null | head -1)
-          if [ -z "$APP_PATH" ]; then
-            echo "Build products:"
-            find build -type d -name "*.app" 2>/dev/null
-            find build -type f -name "*.app" 2>/dev/null
-            ls -laR build/ 2>/dev/null | head -50
-            echo "No .app bundle found, creating placeholder IPA"
-            mkdir -p Payload/TelegramHooker.app
-            cp Info_placeholder.plist Payload/TelegramHooker.app/Info.plist 2>/dev/null || true
+          APP=$(find build -name "*.app" -type d 2>/dev/null | head -1)
+          if [ -n "$APP" ]; then
+            echo "Found: $APP"
+            cp -R "$APP" Payload/
+            cd ..
+            zip -r -y TelegramHooker-iOS.ipa Payload
+            echo "IPA: $(du -h TelegramHooker-iOS.ipa | cut -f1)"
           else
-            echo "Found app: $APP_PATH"
-            cp -R "$APP_PATH" Payload/
+            echo "=== BUILD LOG (last 80 lines) ==="
+            tail -80 ios/build.log 2>/dev/null || true
+            echo "=== Build products ==="
+            find ios/build -type f 2>/dev/null | head -20
+            exit 1
           fi
-          zip -r ../TelegramHooker-iOS.ipa Payload
-          echo "IPA created:"
-          ls -la ../TelegramHooker-iOS.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
