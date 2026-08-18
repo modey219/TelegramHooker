@@ -58,28 +58,46 @@ jobs:
           cat buildozer.spec
           echo "=== main.py exists? ==="
           ls -la main.py
+          echo "=== project structure ==="
+          find . -maxdepth 2 -not -path './.git/*' -not -path './.buildozer/*' | head -40
 
       - name: Build APK
-        run: buildozer --verbose android debug 2>&1 | tee build.log
+        run: |
+          set +e
+          buildozer --verbose android debug > build.log 2>&1
+          EXIT=$?
+          echo "=== Buildozer exit code: $EXIT ==="
+          echo "=== Last 60 lines ==="
+          tail -60 build.log
+          echo "=== Searching APK ==="
+          find . -name "*.apk" -exec ls -lh {} \;
+          find . -name "*.aab" -exec ls -lh {} \;
+          echo "=== bin/ contents ==="
+          ls -laR bin/ 2>/dev/null || echo "No bin/ directory"
+          echo "=== .buildozer/platforms/*/build/*/bin/ ==="
+          find .buildozer -name "*.apk" -exec ls -lh {} \; 2>/dev/null || echo "None"
+          exit $EXIT
 
       - name: Find APK
         id: find_apk
         run: |
-          echo "=== Searching for APK ==="
-          find . -name "*.apk" -exec ls -lh {} \; 2>/dev/null || true
-          APK=$(find . -name "*.apk" -not -path "./.buildozer/*" 2>/dev/null | head -1)
+          APK=""
+          for f in $(find . -name "*.apk" 2>/dev/null); do
+            SIZE=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f" 2>/dev/null || echo 0)
+            if [ "$SIZE" -gt 1000000 ]; then
+              APK="$f"
+              break
+            fi
+          done
           if [ -z "$APK" ]; then
-            APK=$(find .buildozer -name "*.apk" 2>/dev/null | head -1)
+            APK=$(find . -name "*.apk" 2>/dev/null | head -1)
           fi
           if [ -n "$APK" ]; then
-            echo "Found: $APK ($(du -h "$APK" | cut -f1))"
+            echo "FOUND: $APK ($(du -h "$APK" | cut -f1))"
             cp "$APK" ./TelegramHooker.apk
             echo "found=true" >> $GITHUB_OUTPUT
           else
-            echo "NO APK FOUND"
-            ls -laR bin/ 2>/dev/null || echo "No bin/ dir"
-            echo "=== Last 100 lines of build log ==="
-            tail -100 build.log 2>/dev/null || true
+            echo "NO APK FOUND ANYWHERE"
             echo "found=false" >> $GITHUB_OUTPUT
           fi
 
