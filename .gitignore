@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Buildozer
+.buildozer/
+bin/
+
+# Xcode
+ios/build/
+ios/Payload/
+*.xcuserstate
+DerivedData/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+*.log
+
+# Secrets
+*.session
+*.session-journal
+config.json
