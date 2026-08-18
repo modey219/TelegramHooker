@@ -9,7 +9,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 180
+    timeout-minutes: 120
 
     steps:
       - name: Checkout
@@ -22,13 +22,11 @@ jobs:
 
       - name: Install system dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            git zip unzip curl wget \
-            openjdk-17-jdk-headless \
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            git zip unzip openjdk-17-jdk-headless \
             autoconf automake libtool pkg-config \
-            zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 \
-            cmake libffi-dev libssl-dev libltdl-dev
+            zlib1g-dev libncurses5-dev cmake libffi-dev libssl-dev
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -39,80 +37,57 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Cache Buildozer
+      - name: Cache Buildozer + Android SDK/NDK
         uses: actions/cache@v4
         with:
-          path: ~/.buildozer
-          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          path: |
+            ~/.buildozer
+            ~/.android
+          key: buildozer-v2-${{ hashFiles('buildozer.spec') }}-${{ github.run_id }}
           restore-keys: |
-            buildozer-${{ runner.os }}-
+            buildozer-v2-${{ hashFiles('buildozer.spec') }}-
+            buildozer-v2-
 
       - name: Install Buildozer
-        run: |
-          pip install --upgrade pip setuptools wheel
-          pip install buildozer cython virtualenv
-
-      - name: Show buildozer config
-        run: |
-          echo "=== buildozer.spec ==="
-          cat buildozer.spec
-          echo "=== main.py exists? ==="
-          ls -la main.py
-          echo "=== project structure ==="
-          find . -maxdepth 2 -not -path './.git/*' -not -path './.buildozer/*' | head -40
+        run: pip install buildozer cython
 
       - name: Build APK
         run: |
           set +e
-          buildozer --verbose android debug > build.log 2>&1
-          EXIT=$?
-          echo "=== Buildozer exit code: $EXIT ==="
-          echo "=== Last 60 lines ==="
-          tail -60 build.log
-          echo "=== Searching APK ==="
+          buildozer android debug 2>&1 | tee build.log
+          EXIT=${PIPESTATUS[0]}
+          echo "=== Exit: $EXIT ==="
+          echo "=== Last 40 lines ==="
+          tail -40 build.log
+          echo "=== APK search ==="
           find . -name "*.apk" -exec ls -lh {} \;
-          find . -name "*.aab" -exec ls -lh {} \;
-          echo "=== bin/ contents ==="
-          ls -laR bin/ 2>/dev/null || echo "No bin/ directory"
-          echo "=== .buildozer/platforms/*/build/*/bin/ ==="
-          find .buildozer -name "*.apk" -exec ls -lh {} \; 2>/dev/null || echo "None"
+          ls -laR bin/ 2>/dev/null || true
           exit $EXIT
 
-      - name: Find APK
-        id: find_apk
+      - name: Find & Upload APK
+        id: upload_apk
+        if: success()
         run: |
-          APK=""
-          for f in $(find . -name "*.apk" 2>/dev/null); do
-            SIZE=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f" 2>/dev/null || echo 0)
-            if [ "$SIZE" -gt 1000000 ]; then
-              APK="$f"
-              break
-            fi
-          done
-          if [ -z "$APK" ]; then
-            APK=$(find . -name "*.apk" 2>/dev/null | head -1)
-          fi
+          APK=$(find . -name "*.apk" -size +1M 2>/dev/null | head -1)
           if [ -n "$APK" ]; then
-            echo "FOUND: $APK ($(du -h "$APK" | cut -f1))"
             cp "$APK" ./TelegramHooker.apk
             echo "found=true" >> $GITHUB_OUTPUT
+            echo "OK: $APK ($(du -h TelegramHooker.apk | cut -f1))"
           else
-            echo "NO APK FOUND ANYWHERE"
+            echo "NO APK FOUND"
             echo "found=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Upload APK
-        if: steps.find_apk.outputs.found == 'true'
+      - name: Upload Artifact
+        if: steps.upload_apk.outputs.found == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: TelegramHooker-Android-v${{ github.run_number }}
+          name: TelegramHooker-v${{ github.run_number }}
           path: ./TelegramHooker.apk
           retention-days: 30
 
       - name: Release
-        if: steps.find_apk.outputs.found == 'true' && startsWith(github.ref, 'refs/tags/v')
+        if: steps.upload_apk.outputs.found == 'true' && startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: ./TelegramHooker.apk
-          draft: false
-          prerelease: false
