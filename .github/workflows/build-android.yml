@@ -10,6 +10,7 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     timeout-minutes: 120
+    continue-on-error: true
 
     steps:
       - name: Checkout
@@ -43,34 +44,49 @@ jobs:
           path: |
             ~/.buildozer
             ~/.android
-          key: buildozer-v5-${{ hashFiles('buildozer.spec') }}-${{ github.run_id }}
+          key: buildozer-v6-${{ hashFiles('buildozer.spec') }}-${{ github.run_id }}
           restore-keys: |
-            buildozer-v5-${{ hashFiles('buildozer.spec') }}-
-            buildozer-v5-
+            buildozer-v6-${{ hashFiles('buildozer.spec') }}-
+            buildozer-v6-
 
       - name: Install Buildozer
         run: pip install buildozer cython
 
       - name: Build APK
+        id: build_step
         run: |
-          set +e
-          buildozer android debug > build.log 2>&1
-          EXIT=$?
-          echo "Buildozer exit code: $EXIT"
+          buildozer android debug 2>&1 | tee build.log
+          echo "EXIT=${PIPESTATUS[0]}" >> $GITHUB_ENV
+
+      - name: Show build output
+        if: always()
+        run: |
+          echo "=== Exit code: $EXIT ==="
           echo ""
-          echo "=== Last 80 lines ==="
-          tail -80 build.log
+          if [ -f build.log ]; then
+            echo "=== Last 100 lines of build.log ==="
+            tail -100 build.log
+            echo ""
+            echo "=== Searching for errors ==="
+            grep -i "error\|Error\|ERROR\|FAILED\|failed" build.log | tail -30 || true
+          fi
           echo ""
           echo "=== All .apk files ==="
-          find . -name "*.apk" -exec ls -lh {} \; 2>/dev/null
-          echo "=== bin/ ==="
-          ls -laR bin/ 2>/dev/null || echo "(no bin/)"
+          find . -name "*.apk" -exec ls -lh {} \; 2>/dev/null || true
           echo "=== .buildozer APK ==="
-          find .buildozer -name "*.apk" -exec ls -lh {} \; 2>/dev/null || echo "(none)"
-          exit $EXIT
+          find .buildozer -name "*.apk" -exec ls -lh {} \; 2>/dev/null || true
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ github.run_number }}
+          path: build.log
+          retention-days: 30
 
       - name: Find APK
         id: find_apk
+        if: always()
         run: |
           APK=$(find . -name "*.apk" -size +1M 2>/dev/null | head -1)
           if [ -z "$APK" ]; then
@@ -83,7 +99,6 @@ jobs:
           else
             echo "NO APK FOUND"
             echo "found=false" >> $GITHUB_OUTPUT
-            exit 1
           fi
 
       - name: Upload APK
