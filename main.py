@@ -1,4 +1,4 @@
-import os, sys, asyncio, threading, json, base64, hashlib, subprocess, time, shutil
+import os, sys, asyncio, threading, json, base64, hashlib, time
 from pathlib import Path
 
 os.environ["KIVY_NO_ARGS"] = "1"
@@ -11,7 +11,6 @@ from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
 from kivy.uix.button import Button
 from kivy.uix.scrollview import ScrollView
-from kivy.uix.switch import Switch
 from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.graphics import Color, RoundedRectangle
@@ -39,7 +38,6 @@ CONFIG_DIR = HOME / ".telegram_hooker"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 SESSIONS_DIR = CONFIG_DIR / "sessions"
 KEY_FILE = CONFIG_DIR / ".key"
-TERMINAL_DIR = Path("/sdcard/Download/hooker")
 
 if platform == "android":
     from android.permissions import request_permissions, Permission
@@ -145,12 +143,6 @@ def dp_(v):
     return dp(v)
 
 
-def rounded_rect(canvas_buf, pos, size, color, radius=12):
-    with canvas_buf:
-        Color(*color)
-        RoundedRectangle(pos=pos, size=size, radius=[dp_(radius)])
-
-
 class StyledButton(Button):
     def __init__(self, text, color=ACCENT, callback=None, h=None, fs=14, **kw):
         super().__init__(
@@ -181,6 +173,13 @@ class StyledInput(TextInput):
         )
 
 
+def draw_card(w):
+    w.canvas.before.clear()
+    with w.canvas.before:
+        Color(*CARD)
+        RoundedRectangle(pos=w.pos, size=w.size, radius=[dp_(12)])
+
+
 class LoginScreen(Screen):
     def __init__(self, **kw):
         super().__init__(**kw)
@@ -191,8 +190,8 @@ class LoginScreen(Screen):
         sc.bind(minimum_height=sc.setter("height"))
 
         top = BoxLayout(orientation="vertical", size_hint_y=None, height=dp_(140))
-        top.bind(pos=lambda i, v: self._draw_top(i))
-        top.bind(size=lambda i, v: self._draw_top(i))
+        top.bind(pos=lambda i, v: _draw_top(i))
+        top.bind(size=lambda i, v: _draw_top(i))
         top.add_widget(Label(
             text="[b][color=#40A8FF]TELEGRAM[/color] [color=#FFFFFF]HOOKER[/color][/b]",
             markup=True, font_size=dp_(28),
@@ -231,12 +230,6 @@ class LoginScreen(Screen):
         self.api_id.text = str(cfg.get("api_id", ""))
         self.api_hash.text = cfg.get("api_hash", "")
         self.phone.text = cfg.get("phone", "")
-
-    def _draw_top(self, w):
-        w.canvas.before.clear()
-        with w.canvas.before:
-            Color(*ACCENT[:3], 0.08)
-            RoundedRectangle(pos=w.pos, size=w.size, radius=[dp_(20)])
 
     def do_login(self, *a):
         ai, ah, ph = self.api_id.text.strip(), self.api_hash.text.strip(), self.phone.text.strip()
@@ -301,28 +294,34 @@ class LoginScreen(Screen):
         run_async(_go())
 
 
+def _draw_top(w):
+    w.canvas.before.clear()
+    with w.canvas.before:
+        Color(*ACCENT[:3], 0.08)
+        RoundedRectangle(pos=w.pos, size=w.size, radius=[dp_(20)])
+
+
 class MainScreen(Screen):
     def __init__(self, **kw):
         super().__init__(**kw)
         self.pytgcalls = None
+        self.client = None
         self.current_chat_id = None
         self.is_muted = False
-        self._voice_running = False
         self._build_ui()
 
     def _build_ui(self):
         root = BoxLayout(orientation="vertical", padding=dp_(16), spacing=dp_(6))
 
         header = BoxLayout(size_hint_y=None, height=dp_(50))
-        header.bind(pos=lambda i, v: self._draw_card(i))
-        header.bind(size=lambda i, v: self._draw_card(i))
+        header.bind(pos=draw_card)
+        header.bind(size=draw_card)
         hdr_left = BoxLayout(orientation="vertical", size_hint_x=0.7)
         hdr_left.add_widget(Label(text="[b]TELEGRAM HOOKER[/b]", markup=True,
                                   font_size=dp_(17), color=ACCENT, halign="left"))
         hdr_left.add_widget(Label(text=f"v{APP_VERSION} | {COPYRIGHT}", font_size=dp_(10), color=DIM, halign="left"))
         hdr_right = BoxLayout(size_hint_x=0.3)
-        btn_s = StyledButton("Settings", DIM, lambda x: setattr(self.manager, "current", "settings"), dp_(32), 11)
-        hdr_right.add_widget(btn_s)
+        hdr_right.add_widget(StyledButton("Settings", DIM, lambda x: setattr(self.manager, "current", "settings"), dp_(32), 11))
         header.add_widget(hdr_left)
         header.add_widget(hdr_right)
 
@@ -335,37 +334,36 @@ class MainScreen(Screen):
 
         self.target_input = StyledInput("Group ID or @username")
 
-        voice_card = BoxLayout(orientation="vertical", spacing=dp_(6), size_hint_y=None, height=dp_(130))
-        voice_card.bind(pos=lambda i, v: self._draw_card(i))
-        voice_card.bind(size=lambda i, v: self._draw_card(i))
-        voice_card.add_widget(Label(text="[b]VOICE ENGINE[/b]", markup=True, font_size=dp_(14),
-                                   color=ACCENT, size_hint_y=None, height=dp_(28), halign="left"))
+        call_card = BoxLayout(orientation="vertical", spacing=dp_(6), size_hint_y=None, height=dp_(170))
+        call_card.bind(pos=draw_card)
+        call_card.bind(size=draw_card)
+        call_card.add_widget(Label(text="[b]VOICE CALL[/b]", markup=True, font_size=dp_(14),
+                                  color=ACCENT, size_hint_y=None, height=dp_(26), halign="left"))
 
-        voice_row = BoxLayout(spacing=dp_(8), size_hint_y=None, height=dp_(42))
-        self.btn_install = StyledButton("Install Engine", ORANGE, self.do_install_engine, dp_(42), 12)
-        self.btn_start = StyledButton("Start", GREEN, self.do_start_voice, dp_(42), 12)
-        self.btn_stop = StyledButton("Stop", RED, self.do_stop_voice, dp_(42), 12)
-        voice_row.add_widget(self.btn_install)
-        voice_row.add_widget(self.btn_start)
-        voice_row.add_widget(self.btn_stop)
-        voice_card.add_widget(voice_row)
+        row1 = BoxLayout(spacing=dp_(8), size_hint_y=None, height=dp_(42))
+        row1.add_widget(StyledButton("JOIN", GREEN, self.do_join, dp_(42), 13))
+        row1.add_widget(StyledButton("LEAVE", RED, self.do_leave, dp_(42), 13))
+        call_card.add_widget(row1)
 
-        call_row = BoxLayout(spacing=dp_(8), size_hint_y=None, height=dp_(42))
-        call_row.add_widget(StyledButton("JOIN", GREEN, self.do_join, dp_(42), 13))
-        call_row.add_widget(StyledButton("LEAVE", RED, self.do_leave, dp_(42), 13))
-        voice_card.add_widget(call_row)
+        row2 = BoxLayout(spacing=dp_(8), size_hint_y=None, height=dp_(42))
+        row2.add_widget(StyledButton("MUTE", ORANGE, self.do_mute, dp_(42), 13))
+        row2.add_widget(StyledButton("UNMUTE", YELLOW, self.do_unmute, dp_(42), 13))
+        call_card.add_widget(row2)
 
-        mute_row = BoxLayout(spacing=dp_(8), size_hint_y=None, height=dp_(36))
-        mute_row.add_widget(StyledButton("MUTE", ORANGE, self.do_mute, dp_(36), 12))
-        mute_row.add_widget(StyledButton("UNMUTE", YELLOW, self.do_unmute, dp_(36), 12))
-        voice_card.add_widget(mute_row)
+        self.engine_lbl = Label(text="Engine: checking...", font_size=dp_(11), color=DIM,
+                               size_hint_y=None, height=dp_(20), halign="left")
+        call_card.add_widget(self.engine_lbl)
+
+        row3 = BoxLayout(spacing=dp_(8), size_hint_y=None, height=dp_(42))
+        row3.add_widget(StyledButton("START ENGINE", GREEN, self.do_start_engine, dp_(42), 12))
+        call_card.add_widget(row3)
 
         msg_card = BoxLayout(orientation="vertical", spacing=dp_(4), size_hint_y=None, height=dp_(90))
-        msg_card.bind(pos=lambda i, v: self._draw_card(i))
-        msg_card.bind(size=lambda i, v: self._draw_card(i))
+        msg_card.bind(pos=draw_card)
+        msg_card.bind(size=draw_card)
         self.msg_input = StyledInput("Message to send...")
         msg_card.add_widget(self.msg_input)
-        msg_card.add_widget(StyledButton("SEND MESSAGE", ACCENT, self.do_send, dp_(34), 12))
+        msg_card.add_widget(StyledButton("SEND", ACCENT, self.do_send, dp_(34), 12))
 
         log_scroll = ScrollView(size_hint_y=None, height=dp_(80))
         self.log_lbl = Label(text="[color=#808090]Ready[/color]", markup=True,
@@ -380,17 +378,11 @@ class MainScreen(Screen):
         content = BoxLayout(orientation="vertical", spacing=dp_(6), size_hint_y=None)
         content.bind(minimum_height=content.setter("height"))
         for w in [header, self.status_lbl, self.call_lbl, self.mic_lbl,
-                  self.target_input, voice_card, msg_card, log_scroll, btn_logout]:
+                  self.target_input, call_card, msg_card, log_scroll, btn_logout]:
             content.add_widget(w)
         scroll.add_widget(content)
         root.add_widget(scroll)
         self.add_widget(root)
-
-    def _draw_card(self, w):
-        w.canvas.before.clear()
-        with w.canvas.before:
-            Color(*CARD)
-            RoundedRectangle(pos=w.pos, size=w.size, radius=[dp_(12)])
 
     def log(self, msg, color=DIM):
         c = "#{:02x}{:02x}{:02x}".format(int(color[0]*255), int(color[1]*255), int(color[2]*255))
@@ -402,126 +394,57 @@ class MainScreen(Screen):
         user = cfg.get("name") or cfg.get("username") or ""
         if user:
             self.status_lbl.text = f"Logged in: {user}"
-        self._check_voice_engine()
+        self._check_engine()
 
-    def _check_voice_engine(self):
-        if TERMINAL_DIR.exists() and (TERMINAL_DIR / "1_light_android.py").exists():
-            self.log("Voice engine found", GREEN)
-        else:
-            self.log("Voice engine not installed", ORANGE)
-
-    def _run_termux_cmd(self, cmd):
+    def _check_engine(self):
         try:
-            result = subprocess.run(
-                ["termux-exec", "-c", cmd],
-                capture_output=True, text=True, timeout=10,
-            )
-            return result.stdout.strip(), result.returncode
-        except FileNotFoundError:
-            pass
-        except Exception:
-            pass
-        try:
-            result = subprocess.run(
-                ["su", "-c", f"run-as com.termux termux-exec -c '{cmd}'"],
-                capture_output=True, text=True, timeout=10,
-            )
-            return result.stdout.strip(), result.returncode
-        except Exception:
-            pass
-        return None, -1
+            import ntgcalls
+            import pytgcalls
+            self.engine_lbl.text = "Engine: READY (ntgcalls + pytgcalls)"
+            self.engine_lbl.color = GREEN
+            self.log("Voice engine loaded!", GREEN)
+        except ImportError as e:
+            self.engine_lbl.text = f"Engine: MISSING ({e.name or 'ntgcalls'})"
+            self.engine_lbl.color = RED
+            self.log(f"Voice engine not available: {e}", RED)
 
-    def do_install_engine(self, *a):
-        self.log("Installing voice engine...", YELLOW)
-        Clock.schedule_once(lambda dt: self._install_engine(), 0.1)
+    def do_start_engine(self, *a):
+        self.log("Checking voice engine...", YELLOW)
+        self._check_engine()
 
-    def _install_engine(self):
-        try:
-            termux_dir = Path("/data/data/com.termux")
-            if not termux_dir.exists():
-                self.log("Termux not installed!", RED)
-                return
-            pkg_dir = Path("/data/data/com.termux/files/usr")
-            if not pkg_dir.exists():
-                self.log("Termux not configured!", RED)
-                return
-
-            scripts_dir = TERMINAL_DIR
-            scripts_dir.mkdir(parents=True, exist_ok=True)
-
-            src_dir = Path(os.path.dirname(os.path.abspath(__file__)))
-            for name in ["start.sh", "hooker.py"]:
-                src = src_dir / "terminal" / name
-                if src.exists():
-                    shutil.copy2(str(src), str(scripts_dir / name))
-
-            boot = scripts_dir / "start.sh"
-            if boot.exists():
-                import stat
-                boot.chmod(boot.stat().st_mode | stat.S_IEXEC)
-
-            self.log("Voice engine installed!", GREEN)
-        except Exception as e:
-            self.log(f"Install failed: {str(e)[:60]}", RED)
-
-    def do_start_voice(self, *a):
-        self.log("Starting voice engine...", YELLOW)
-        Clock.schedule_once(lambda dt: self._start_voice(), 0.1)
-
-    def _start_voice(self):
-        try:
-            script = TERMINAL_DIR / "start.sh"
-            if not script.exists():
-                self.log("Engine not installed - tap Install", RED)
-                return
-            subprocess.Popen(
-                ["sh", str(script)],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            self._voice_running = True
-            self.log("Voice engine started!", GREEN)
-            self.status_lbl.text = "Voice engine active"
-            self.status_lbl.color = GREEN
-        except Exception as e:
-            self.log(f"Start failed: {str(e)[:60]}", RED)
-
-    def do_stop_voice(self, *a):
-        try:
-            subprocess.run(["pkill", "-f", "hooker.py"], capture_output=True, timeout=5)
-            subprocess.run(["pkill", "-f", "start.sh"], capture_output=True, timeout=5)
-            self._voice_running = False
-            self.log("Voice engine stopped", ORANGE)
-            self.status_lbl.text = "Engine stopped"
-            self.status_lbl.color = DIM
-        except Exception as e:
-            self.log(f"Stop failed: {str(e)[:60]}", RED)
+    def _get_client(self):
+        cfg = load_config()
+        if not cfg.get("api_id"):
+            return None
+        sessions = [f.stem for f in SESSIONS_DIR.glob("*.session")]
+        if not sessions:
+            return None
+        from pyrogram import Client
+        return Client(str(SESSIONS_DIR / sessions[-1]),
+                      api_id=int(cfg["api_id"]), api_hash=cfg["api_hash"])
 
     def do_join(self, *a):
         target = self.target_input.text.strip()
         if not target:
             self.log("Enter a group ID first", RED)
             return
-        self.log("Joining...", YELLOW)
+        self.log("Connecting to call...", YELLOW)
         Clock.schedule_once(lambda dt: self._join(target), 0.1)
 
     def _join(self, target):
         async def _go():
             try:
-                from pyrogram import Client
                 from pytgcalls import PyTgCalls
                 from pytgcalls.media_devices import InputDevice, SpeakerDevice
                 from pytgcalls.types.stream.media_stream import MediaStream
 
-                cfg = load_config()
-                sessions = [f.stem for f in SESSIONS_DIR.glob("*.session")]
-                if not sessions:
+                client = self._get_client()
+                if not client:
                     Clock.schedule_once(lambda dt: self.log("Not logged in", RED), 0)
                     return
-                path = str(SESSIONS_DIR / sessions[-1])
-                client = Client(path, api_id=int(cfg["api_id"]), api_hash=cfg["api_hash"])
                 await client.start()
 
+                self.client = client
                 if not self.pytgcalls:
                     self.pytgcalls = PyTgCalls(client)
                     await self.pytgcalls.start()
@@ -554,7 +477,7 @@ class MainScreen(Screen):
                 self.current_chat_id = chat_id
                 Clock.schedule_once(lambda dt: self._on_joined(chat_id, target), 0)
             except Exception as e:
-                Clock.schedule_once(lambda dt: self.log(f"Error: {str(e)[:100]}", RED), 0)
+                Clock.schedule_once(lambda dt: self.log(f"Error: {str(e)[:120]}", RED), 0)
         run_async(_go())
 
     def _on_joined(self, chat_id, target):
@@ -573,7 +496,7 @@ class MainScreen(Screen):
                 self.is_muted = True
                 Clock.schedule_once(lambda dt: self._mic_state(True), 0)
             except Exception as e:
-                Clock.schedule_once(lambda dt: self.log(f"Mute failed: {e}", RED), 0)
+                Clock.schedule_once(lambda dt: self.log(f"Error: {e}", RED), 0)
         run_async(_go())
 
     def do_unmute(self, *a):
@@ -585,7 +508,7 @@ class MainScreen(Screen):
                 self.is_muted = False
                 Clock.schedule_once(lambda dt: self._mic_state(False), 0)
             except Exception as e:
-                Clock.schedule_once(lambda dt: self.log(f"Unmute failed: {e}", RED), 0)
+                Clock.schedule_once(lambda dt: self.log(f"Error: {e}", RED), 0)
         run_async(_go())
 
     def _mic_state(self, muted):
@@ -621,13 +544,9 @@ class MainScreen(Screen):
         self.log("Sending...", YELLOW)
         async def _go():
             try:
-                cfg = load_config()
-                sessions = [f.stem for f in SESSIONS_DIR.glob("*.session")]
-                if not sessions:
+                client = self._get_client()
+                if not client:
                     Clock.schedule_once(lambda dt: self.log("Not logged in", RED), 0); return
-                from pyrogram import Client
-                client = Client(str(SESSIONS_DIR / sessions[-1]),
-                                api_id=int(cfg["api_id"]), api_hash=cfg["api_hash"])
                 await client.start()
                 chat = await client.get_chat(target)
                 await client.send_message(chat.id, text)
@@ -648,6 +567,7 @@ class MainScreen(Screen):
         run_async(_go())
         self.current_chat_id = None
         self.pytgcalls = None
+        self.client = None
         save_config({})
         self.manager.current = "login"
 
@@ -683,23 +603,29 @@ class SettingsScreen(Screen):
         sc.add_widget(self.user_lbl)
 
         sc.add_widget(section("Voice Engine"))
-        sc.add_widget(info(f"Engine path: {TERMINAL_DIR}", DIM, 11))
-        sc.add_widget(info("Install Termux from F-Droid first", ORANGE, 11))
-        sc.add_widget(info("Engine uses PulseAudio for real mic", DIM, 11))
+        try:
+            import ntgcalls
+            import pytgcalls
+            sc.add_widget(info("ntgcalls: OK", GREEN, 11))
+            sc.add_widget(info("pytgcalls: OK", GREEN, 11))
+        except ImportError as e:
+            sc.add_widget(info(f"Missing: {e.name}", RED, 11))
+        sc.add_widget(info("Audio: PulseAudio + ALSA", DIM, 11))
+        sc.add_widget(info("Codec: Opus 48kHz", DIM, 11))
 
         sc.add_widget(section("Security"))
         sc.add_widget(info("AES-256-GCM encryption", GREEN, 11))
-        sc.add_widget(info("API keys stored encrypted on device", GREEN, 11))
+        sc.add_widget(info("API keys encrypted on device", GREEN, 11))
         sc.add_widget(info("Session files local only", GREEN, 11))
 
         sc.add_widget(section("About"))
         sc.add_widget(info(f"{APP_NAME} v{APP_VERSION}", WHITE, 13))
         sc.add_widget(info(f"Copyright {COPYRIGHT} - All Rights Reserved", DIM, 12))
-        sc.add_widget(info("Kivy + Pyrogram + PyTgCalls + ntgcalls", DIM, 10))
-        sc.add_widget(info("Audio: Telegram WebRTC engine", DIM, 10))
+        sc.add_widget(info("Kivy + Pyrogram + PyTgCalls", DIM, 10))
+        sc.add_widget(info("Native Telegram voice engine", DIM, 10))
 
         sc.add_widget(Label(text="", size_hint_y=None, height=dp_(20)))
-        sc.add_widget(info(f"  {COPYRIGHT} 2026 - Made with passion", DIM2, 11))
+        sc.add_widget(info(f"  {COPYRIGHT} 2026", DIM2, 11))
 
         scroll.add_widget(sc)
         root.add_widget(scroll)

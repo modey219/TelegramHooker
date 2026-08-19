@@ -37,56 +37,57 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Cache Buildozer + Android SDK/NDK
+      - name: Cache Buildozer
         uses: actions/cache@v4
         with:
           path: |
             ~/.buildozer
             ~/.android
-          key: buildozer-v3-${{ hashFiles('buildozer.spec') }}-${{ github.run_id }}
+          key: buildozer-v5-${{ hashFiles('buildozer.spec') }}-${{ github.run_id }}
           restore-keys: |
-            buildozer-v3-${{ hashFiles('buildozer.spec') }}-
-            buildozer-v3-
+            buildozer-v5-${{ hashFiles('buildozer.spec') }}-
+            buildozer-v5-
 
       - name: Install Buildozer
         run: pip install buildozer cython
 
       - name: Build APK
         run: |
-          buildozer android debug 2>&1 | tee build.log
-          echo ${PIPESTATUS[0]} > build_exit.txt
+          set +e
+          buildozer android debug > build.log 2>&1
+          EXIT=$?
+          echo "Buildozer exit code: $EXIT"
+          echo ""
+          echo "=== Last 80 lines ==="
+          tail -80 build.log
+          echo ""
+          echo "=== All .apk files ==="
+          find . -name "*.apk" -exec ls -lh {} \; 2>/dev/null
+          echo "=== bin/ ==="
+          ls -laR bin/ 2>/dev/null || echo "(no bin/)"
+          echo "=== .buildozer APK ==="
+          find .buildozer -name "*.apk" -exec ls -lh {} \; 2>/dev/null || echo "(none)"
+          exit $EXIT
 
-      - name: Upload build log on failure
-        if: failure() || steps.build.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: build.log
-          retention-days: 5
-
-      - name: Find & Upload APK
-        id: upload_apk
-        if: success()
+      - name: Find APK
+        id: find_apk
         run: |
-          EXIT=$(cat build_exit.txt 2>/dev/null || echo "1")
-          echo "Buildozer exit: $EXIT"
-          if [ "$EXIT" != "0" ]; then
-            echo "Buildozer failed, see log above"
-            echo "found=false" >> $GITHUB_OUTPUT
-            exit 1
-          fi
           APK=$(find . -name "*.apk" -size +1M 2>/dev/null | head -1)
+          if [ -z "$APK" ]; then
+            APK=$(find . -name "*.apk" 2>/dev/null | head -1)
+          fi
           if [ -n "$APK" ]; then
             cp "$APK" ./TelegramHooker.apk
+            echo "FOUND: $APK ($(du -h TelegramHooker.apk | cut -f1))"
             echo "found=true" >> $GITHUB_OUTPUT
           else
             echo "NO APK FOUND"
-            find . -name "*.apk" -exec ls -lh {} \; 2>/dev/null || true
             echo "found=false" >> $GITHUB_OUTPUT
+            exit 1
           fi
 
-      - name: Upload Artifact
-        if: steps.upload_apk.outputs.found == 'true'
+      - name: Upload APK
+        if: steps.find_apk.outputs.found == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: TelegramHooker-v${{ github.run_number }}
@@ -94,7 +95,7 @@ jobs:
           retention-days: 30
 
       - name: Release
-        if: steps.upload_apk.outputs.found == 'true' && startsWith(github.ref, 'refs/tags/v')
+        if: steps.find_apk.outputs.found == 'true' && startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: ./TelegramHooker.apk
