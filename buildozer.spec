@@ -22,6 +22,6 @@ android.debug_artifact = apk
 android.enable_androidx = True
 source.exclude_patterns = .github/*,terminal/*,docker/*,ios/*,src/*
 log_level = 2
-p4a.branch = develop
+p4a.branch = master
 [buildozer]
 warn_on_root = 0
