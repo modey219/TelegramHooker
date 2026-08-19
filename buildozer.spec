@@ -7,7 +7,7 @@ source.main = main.py
 source.include_exts = py,png
 source.include_patterns = icon.png
 version = 2.0.0
-requirements = python3,kivy,pyrogram,py-tgcalls==2.2.0,ntgcalls==2.2.5,cryptography,tgcrypto,certifi
+requirements = python3,kivy,pyrogram,tgcrypto,certifi,cryptography
 orientation = portrait
 fullscreen = 0
 icon.filename = %(source.dir)s/icon.png
@@ -17,7 +17,7 @@ android.minapi = 24
 android.ndk = 25b
 android.archs = arm64-v8a
 android.accept_sdk_license = True
-android.permissions = INTERNET,RECORD_AUDIO,MODIFY_AUDIO_SETTINGS,ACCESS_NETWORK_STATE,WAKE_LOCK,FOREGROUND_SERVICE,POST_NOTIFICATIONS
+android.permissions = INTERNET,RECORD_AUDIO,MODIFY_AUDIO_SETTINGS,ACCESS_NETWORK_STATE,WAKE_LOCK,FOREGROUND_SERVICE,POST_NOTIFICATIONS,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE
 android.debug_artifact = apk
 android.enable_androidx = True
 log_level = 2
