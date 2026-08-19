@@ -20,7 +20,7 @@ android.accept_sdk_license = True
 android.permissions = INTERNET,RECORD_AUDIO,MODIFY_AUDIO_SETTINGS,ACCESS_NETWORK_STATE,WAKE_LOCK,FOREGROUND_SERVICE,POST_NOTIFICATIONS
 android.debug_artifact = apk
 android.enable_androidx = True
-source.exclude_patterns = .github/*,terminal/*,docker/*,ios/*,src/*,build-native*,*.md,LICENSE*,setup*,requirements*,.gitignore
+source.exclude_patterns = .github/*,terminal/*,docker/*,ios/*,src/*
 log_level = 2
 p4a.branch = develop
 [buildozer]

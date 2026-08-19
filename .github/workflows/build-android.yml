@@ -10,7 +10,6 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     timeout-minutes: 120
-    continue-on-error: true
 
     steps:
       - name: Checkout
@@ -44,50 +43,36 @@ jobs:
           path: |
             ~/.buildozer
             ~/.android
-          key: buildozer-v6-${{ hashFiles('buildozer.spec') }}-${{ github.run_id }}
+          key: buildozer-v8-${{ hashFiles('buildozer.spec') }}-${{ github.run_id }}
           restore-keys: |
-            buildozer-v6-${{ hashFiles('buildozer.spec') }}-
-            buildozer-v6-
+            buildozer-v8-${{ hashFiles('buildozer.spec') }}-
+            buildozer-v8-
 
       - name: Install Buildozer
         run: pip install buildozer cython
 
       - name: Build APK
-        id: build_step
-        run: |
-          buildozer android debug 2>&1 | tee build.log
-          echo "EXIT=${PIPESTATUS[0]}" >> $GITHUB_ENV
-
-      - name: Show build output
-        if: always()
-        run: |
-          echo "=== Exit code: $EXIT ==="
-          echo ""
-          if [ -f build.log ]; then
-            echo "=== Last 100 lines of build.log ==="
-            tail -100 build.log
-            echo ""
-            echo "=== Searching for errors ==="
-            grep -i "error\|Error\|ERROR\|FAILED\|failed" build.log | tail -30 || true
-          fi
-          echo ""
-          echo "=== All .apk files ==="
-          find . -name "*.apk" -exec ls -lh {} \; 2>/dev/null || true
-          echo "=== .buildozer APK ==="
-          find .buildozer -name "*.apk" -exec ls -lh {} \; 2>/dev/null || true
+        run: buildozer -v android debug 2>&1 | tail -200
 
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-log-${{ github.run_number }}
-          path: build.log
+          name: build-output-${{ github.run_number }}
+          path: |
+            .buildozer/**/*.log
+            .buildozer/**/*.txt
           retention-days: 30
 
       - name: Find APK
         id: find_apk
-        if: always()
         run: |
+          echo "=== All .apk files ==="
+          find . -name "*.apk" -exec ls -lh {} \; 2>/dev/null || true
+          echo "=== .buildozer APK ==="
+          find .buildozer -name "*.apk" -exec ls -lh {} \; 2>/dev/null || true
+          echo "=== bin/ ==="
+          ls -laR bin/ 2>/dev/null || echo "(no bin/)"
           APK=$(find . -name "*.apk" -size +1M 2>/dev/null | head -1)
           if [ -z "$APK" ]; then
             APK=$(find . -name "*.apk" 2>/dev/null | head -1)
@@ -99,6 +84,7 @@ jobs:
           else
             echo "NO APK FOUND"
             echo "found=false" >> $GITHUB_OUTPUT
+            exit 1
           fi
 
       - name: Upload APK
