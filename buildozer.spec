@@ -4,10 +4,10 @@ package.name = telegramhooker
 package.domain = com.aseqx12
 source.dir = .
 source.main = main.py
-source.include_exts = py,png,so
+source.include_exts = py,png
 source.include_patterns = icon.png
 version = 2.0.0
-requirements = python3,kivy,pyrogram,py-tgcalls==2.2.0,ntgcalls==2.2.5,tgcrypto,certifi,cryptography
+requirements = python3,kivy,pyrogram,tgcrypto,certifi,cryptography
 orientation = portrait
 fullscreen = 0
 icon.filename = %(source.dir)s/icon.png
@@ -20,7 +20,6 @@ android.accept_sdk_license = True
 android.permissions = INTERNET,RECORD_AUDIO,MODIFY_AUDIO_SETTINGS,ACCESS_NETWORK_STATE,WAKE_LOCK,FOREGROUND_SERVICE,POST_NOTIFICATIONS
 android.debug_artifact = apk
 android.enable_androidx = True
-p4a.local_recipes = ./recipes
 log_level = 2
 p4a.branch = develop
 [buildozer]
