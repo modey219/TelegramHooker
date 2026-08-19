@@ -66,19 +66,27 @@ class Cipher:
         return cls._key
 
     @classmethod
+    def _xor(cls, data, key):
+        out = bytearray(len(data))
+        for i in range(len(data)):
+            out[i] = data[i] ^ key[i % len(key)]
+        return bytes(out)
+
+    @classmethod
     def encrypt(cls, data):
         key = cls._get_key()
-        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-        nonce = os.urandom(12)
-        ct = AESGCM(key).encrypt(nonce, data.encode("utf-8"), None)
-        return base64.b64encode(nonce + ct).decode("ascii")
+        iv = os.urandom(16)
+        raw = data.encode("utf-8")
+        encrypted = cls._xor(raw, hashlib.sha256(key + iv).digest() * ((len(raw) // 32) + 1))
+        return base64.b64encode(iv + encrypted).decode("ascii")
 
     @classmethod
     def decrypt(cls, token):
         key = cls._get_key()
-        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
         raw = base64.b64decode(token)
-        return AESGCM(key).decrypt(raw[:12], raw[12:], None).decode("utf-8")
+        iv, encrypted = raw[:16], raw[16:]
+        decrypted = cls._xor(encrypted, hashlib.sha256(key + iv).digest() * ((len(encrypted) // 32) + 1))
+        return decrypted.decode("utf-8")
 
 
 def ensure_dirs():
