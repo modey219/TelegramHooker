@@ -57,11 +57,14 @@ jobs:
           EXIT=$?
           echo "Buildozer exit code: $EXIT"
           echo ""
-          echo "=== Last 100 lines ==="
-          tail -100 build.log
+          echo "=== ERRORS ==="
+          grep -n -i "error\|Error\|ERROR\|exception\|traceback\|failed" build.log | grep -v "^#" | tail -40 || echo "(no error lines found)"
+          echo ""
+          echo "=== Last 200 lines ==="
+          tail -200 build.log
           echo ""
           echo "=== All .apk files ==="
-          find . -name "*.apk" -exec ls -lh {} \; 2>/dev/null
+          find . -name "*.apk" -exec ls -lh {} \; 2>/dev/null || true
           echo "=== .buildozer APK ==="
           find .buildozer -name "*.apk" -exec ls -lh {} \; 2>/dev/null || true
           exit $EXIT
