@@ -22,10 +22,10 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install pyinstaller pyrogram pytgcalls
+        run: pip install pyinstaller pyrogram
 
       - name: Build Hooker Light EXE
-        run: pyinstaller --onefile --windowed --name "TelegramHooker_Light_v1.0" windows_light/hooker_light.py
+        run: pyinstaller --onefile --windowed --name "TelegramHooker_Light_v1.0" --exclude-module pytgcalls --exclude-module tgcalls windows_light/hooker_light.py
 
       - name: Upload Hooker Light
         uses: actions/upload-artifact@v4

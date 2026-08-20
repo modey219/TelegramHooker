@@ -11,7 +11,9 @@ try:
 except RuntimeError:
     asyncio.set_event_loop(asyncio.new_event_loop())
 
-required_libs = {"pyrogram": "pyrogram", "pytgcalls": "pytgcalls"}
+required_libs = {"pyrogram": "pyrogram"}
+optional_libs = {"pytgcalls": "pytgcalls"}
+
 for lib_name, pip_name in required_libs.items():
     try:
         __import__(lib_name)
@@ -21,6 +23,12 @@ for lib_name, pip_name in required_libs.items():
             subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", pip_name])
         except Exception as e:
             print(f"[-] Failed to install {pip_name}: {e}")
+
+for lib_name, pip_name in optional_libs.items():
+    try:
+        __import__(lib_name)
+    except ImportError:
+        print(f"[!] {pip_name} not available (optional)")
 
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
