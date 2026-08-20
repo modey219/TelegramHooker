@@ -8,102 +8,26 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 240
+    name: Build APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Build with Buildozer
+        uses: ArtemSBulgakov/buildozer-action@v1
+        id: buildozer
         with:
-          python-version: '3.11'
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq \
-            git zip unzip openjdk-17-jdk-headless \
-            autoconf automake libtool pkg-config \
-            zlib1g-dev libncurses5-dev cmake libffi-dev libssl-dev
-
-      - name: Setup Java 17
-        uses: actions/setup-java@v5
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Cache Buildozer
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.buildozer
-            ~/.android
-          key: buildozer-v1-${{ runner.os }}-python3.11
-          restore-keys: |
-            buildozer-v1-${{ runner.os }}-
-
-      - name: Install Buildozer
-        run: pip install buildozer cython
-
-      - name: Build APK
-        run: |
-          set +e
-          buildozer android debug > build.log 2>&1
-          EXIT=$?
-          echo "Buildozer exit code: $EXIT"
-          echo ""
-          echo "=== ERRORS ==="
-          grep -n -i "error\|Error\|ERROR\|exception\|traceback\|failed" build.log | grep -v "^#" | tail -40 || echo "(no error lines found)"
-          echo ""
-          echo "=== Last 200 lines ==="
-          tail -200 build.log
-          echo ""
-          echo "=== All .apk files ==="
-          find . -name "*.apk" -exec ls -lh {} \; 2>/dev/null || true
-          echo "=== .buildozer APK ==="
-          find .buildozer -name "*.apk" -exec ls -lh {} \; 2>/dev/null || true
-          exit $EXIT
-
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log-${{ github.run_number }}
-          path: build.log
-          retention-days: 30
-
-      - name: Find APK
-        id: find_apk
-        if: always()
-        run: |
-          APK=$(find . -name "*.apk" -size +1M 2>/dev/null | head -1)
-          if [ -z "$APK" ]; then
-            APK=$(find . -name "*.apk" 2>/dev/null | head -1)
-          fi
-          if [ -n "$APK" ]; then
-            cp "$APK" ./TelegramHooker.apk
-            echo "FOUND: $APK ($(du -h TelegramHooker.apk | cut -f1))"
-            echo "found=true" >> $GITHUB_OUTPUT
-          else
-            echo "NO APK FOUND"
-            echo "found=false" >> $GITHUB_OUTPUT
-          fi
+          workdir: .
+          buildozer_version: stable
+          command: android debug
 
       - name: Upload APK
-        if: steps.find_apk.outputs.found == 'true'
+        if: steps.buildozer.outputs.filename != ''
         uses: actions/upload-artifact@v4
         with:
           name: TelegramHooker-v${{ github.run_number }}
-          path: ./TelegramHooker.apk
+          path: ${{ steps.buildozer.outputs.filename }}
           retention-days: 30
-
-      - name: Release
-        if: steps.find_apk.outputs.found == 'true' && startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ./TelegramHooker.apk
