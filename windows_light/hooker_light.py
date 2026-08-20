@@ -71,7 +71,7 @@ def get_machine_id():
 
 def validate_license_online(code, device_id):
     import urllib.request, urllib.error
-    url = f"{SUPABASE_URL}/rest/rpc/validate_license"
+    url = f"{SUPABASE_URL}/rest/v1/rpc/validate_license"
     payload = json.dumps({"p_code": code, "p_device_id": device_id}).encode("utf-8")
     req = urllib.request.Request(url, data=payload, method="POST")
     req.add_header("apikey", SUPABASE_ANON_KEY)
@@ -88,7 +88,7 @@ def validate_license_online(code, device_id):
 
 def generate_license_online(max_devices, days, note):
     import urllib.request, urllib.error
-    url = f"{SUPABASE_URL}/rest/rpc/generate_license"
+    url = f"{SUPABASE_URL}/rest/v1/rpc/generate_license"
     payload = json.dumps({
         "p_max_devices": max_devices,
         "p_days": days,
@@ -107,7 +107,7 @@ def generate_license_online(max_devices, days, note):
 
 def revoke_license_online(code):
     import urllib.request, urllib.error
-    url = f"{SUPABASE_URL}/rest/rpc/revoke_license"
+    url = f"{SUPABASE_URL}/rest/v1/rpc/revoke_license"
     payload = json.dumps({"p_code": code}).encode("utf-8")
     req = urllib.request.Request(url, data=payload, method="POST")
     req.add_header("apikey", SUPABASE_ANON_KEY)

@@ -13,7 +13,7 @@ TITLE_FONT = ("Consolas", 14, "bold")
 
 
 def api_call(rpc_name, params):
-    url = f"{SUPABASE_URL}/rest/rpc/{rpc_name}"
+    url = f"{SUPABASE_URL}/rest/v1/rpc/{rpc_name}"
     payload = json.dumps(params).encode("utf-8")
     req = urllib.request.Request(url, data=payload, method="POST")
     req.add_header("apikey", SUPABASE_ANON_KEY)

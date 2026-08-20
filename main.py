@@ -108,7 +108,7 @@ def get_device_id():
 
 def validate_license_online(code, device_id):
     import urllib.request, urllib.error
-    url = f"{SUPABASE_URL}/rest/rpc/validate_license"
+    url = f"{SUPABASE_URL}/rest/v1/rpc/validate_license"
     payload = json.dumps({"p_code": code, "p_device_id": device_id}).encode("utf-8")
     req = urllib.request.Request(url, data=payload, method="POST")
     req.add_header("apikey", SUPABASE_ANON_KEY)
