@@ -1,8 +1,38 @@
-import os, sys, asyncio, threading, json, base64, hashlib, time
+import os, sys, asyncio, threading, json, base64, hashlib, time, traceback
 from pathlib import Path
+
+_CRASH_LOG = Path("/sdcard/Download/crash.log")
+
+def _write_crash(tb_str):
+    try:
+        _CRASH_LOG.write_text(tb_str, "utf-8")
+    except Exception:
+        pass
+
+_init_excepthook = sys.excepthook
+def _my_excepthook(exc_type, exc_value, exc_tb):
+    tb_str = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+    _write_crash(tb_str)
+    _init_excepthook(exc_type, exc_value, exc_tb)
+sys.excepthook = _my_excepthook
+
+_orig_thread_run = threading.Thread.run
+def _safe_thread_run(self):
+    try:
+        _orig_thread_run(self)
+    except Exception:
+        tb_str = "".join(traceback.format_exception(*sys.exc_info()))
+        _write_crash(tb_str)
+threading.Thread.run = _safe_thread_run
 
 os.environ["KIVY_NO_ARGS"] = "1"
 os.environ["KIVY_NO_CONSOLELOG"] = "1"
+os.environ["KIVY_LOG_LEVEL"] = "critical"
+
+try:
+    import certifi
+except ImportError:
+    pass
 
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, SlideTransition
@@ -40,14 +70,17 @@ SESSIONS_DIR = CONFIG_DIR / "sessions"
 KEY_FILE = CONFIG_DIR / ".key"
 
 if platform == "android":
-    from android.permissions import request_permissions, Permission
-    request_permissions([
-        Permission.INTERNET,
-        Permission.RECORD_AUDIO,
-        Permission.MODIFY_AUDIO_SETTINGS,
-        Permission.WRITE_EXTERNAL_STORAGE,
-        Permission.READ_EXTERNAL_STORAGE,
-    ])
+    try:
+        from android.permissions import request_permissions, Permission
+        request_permissions([
+            Permission.INTERNET,
+            Permission.RECORD_AUDIO,
+            Permission.MODIFY_AUDIO_SETTINGS,
+            Permission.WRITE_EXTERNAL_STORAGE,
+            Permission.READ_EXTERNAL_STORAGE,
+        ])
+    except Exception:
+        pass
 
 
 class Cipher:
@@ -140,7 +173,10 @@ class AsyncThread(threading.Thread):
 
 
 _bg = AsyncThread()
-_bg.start()
+try:
+    _bg.start()
+except Exception:
+    pass
 
 
 def run_async(coro):
@@ -226,6 +262,13 @@ class LoginScreen(Screen):
                            size_hint_y=None, height=dp_(28))
         sc.add_widget(self.status)
 
+        if _CRASH_LOG.exists():
+            try:
+                crash_text = _CRASH_LOG.read_text("utf-8")[-200:]
+                sc.add_widget(StyledButton("VIEW CRASH LOG", RED, self._show_crash))
+            except Exception:
+                pass
+
         sc.add_widget(Label(text=f"  {COPYRIGHT} - All Rights Reserved",
                            font_size=dp_(11), color=DIM2,
                            size_hint_y=None, height=dp_(24)))
@@ -284,6 +327,15 @@ class LoginScreen(Screen):
         self.status.text = "[color=#FFD700]Restoring...[/color]"
         self.status.markup = True
         Clock.schedule_once(lambda dt: self._restore(sessions[-1]), 0.1)
+
+    def _show_crash(self, *a):
+        try:
+            crash_text = _CRASH_LOG.read_text("utf-8")[-300:]
+            self.status.text = f"[color=#FF4D4D]{crash_text[:80]}[/color]"
+            self.status.markup = True
+        except Exception:
+            self.status.text = "[color=#FF4D4D]No crash log found[/color]"
+            self.status.markup = True
 
     def _restore(self, name):
         async def _go():
@@ -411,10 +463,10 @@ class MainScreen(Screen):
             self.engine_lbl.text = "Engine: READY (ntgcalls + pytgcalls)"
             self.engine_lbl.color = GREEN
             self.log("Voice engine loaded!", GREEN)
-        except ImportError as e:
-            self.engine_lbl.text = f"Engine: MISSING ({e.name or 'ntgcalls'})"
-            self.engine_lbl.color = RED
-            self.log(f"Voice engine not available: {e}", RED)
+        except Exception as e:
+            self.engine_lbl.text = "Engine: Not installed (optional)"
+            self.engine_lbl.color = YELLOW
+            self.log(f"Voice engine not available", ORANGE)
 
     def do_start_engine(self, *a):
         self.log("Checking voice engine...", YELLOW)
@@ -616,8 +668,8 @@ class SettingsScreen(Screen):
             import pytgcalls
             sc.add_widget(info("ntgcalls: OK", GREEN, 11))
             sc.add_widget(info("pytgcalls: OK", GREEN, 11))
-        except ImportError as e:
-            sc.add_widget(info(f"Missing: {e.name}", RED, 11))
+        except Exception as e:
+            sc.add_widget(info(f"Not available (optional)", ORANGE, 11))
         sc.add_widget(info("Audio: PulseAudio + ALSA", DIM, 11))
         sc.add_widget(info("Codec: Opus 48kHz", DIM, 11))
 
@@ -655,9 +707,12 @@ class SettingsScreen(Screen):
 class TelegramHookerApp(App):
     def build(self):
         self.title = APP_NAME
-        icon_path = Path(os.path.dirname(os.path.abspath(__file__))) / "icon.png"
-        if icon_path.exists():
-            self.icon = str(icon_path)
+        try:
+            icon_path = Path(os.path.dirname(os.path.abspath(__file__))) / "icon.png"
+            if icon_path.exists():
+                self.icon = str(icon_path)
+        except Exception:
+            pass
 
         sm = ScreenManager(transition=SlideTransition(direction="left", duration=0.2))
         sm.add_widget(LoginScreen(name="login"))
@@ -673,5 +728,9 @@ class TelegramHookerApp(App):
 
 
 if __name__ == "__main__":
-    ensure_dirs()
-    TelegramHookerApp().run()
+    try:
+        ensure_dirs()
+        TelegramHookerApp().run()
+    except Exception:
+        tb_str = "".join(traceback.format_exception(*sys.exc_info()))
+        _write_crash(tb_str)
