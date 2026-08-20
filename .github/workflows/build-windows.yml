@@ -1,0 +1,64 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build-hooker:
+    name: Build Hooker Light EXE
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pyinstaller pyrogram pytgcalls
+
+      - name: Build Hooker Light EXE
+        run: pyinstaller --onefile --windowed --name "TelegramHooker_Light_v1.0" windows_light/hooker_light.py
+
+      - name: Upload Hooker Light
+        uses: actions/upload-artifact@v4
+        with:
+          name: TelegramHooker_Light_v1.0
+          path: dist/*.exe
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-admin:
+    name: Build Admin Tool EXE
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pyinstaller
+
+      - name: Build Admin Tool EXE
+        run: pyinstaller --onefile --windowed --name "CodeGenerator_v1.0" windows_light/admin_tool.py
+
+      - name: Upload Admin Tool
+        uses: actions/upload-artifact@v4
+        with:
+          name: CodeGenerator_v1.0
+          path: dist/*.exe
+          retention-days: 30
+          if-no-files-found: warn

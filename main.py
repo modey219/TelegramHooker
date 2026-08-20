@@ -210,9 +210,12 @@ def load_license():
     return ""
 
 
-def save_license(code):
+def save_license(code, days_left=-1, expires_at=None):
     ensure_dirs()
-    LICENSE_FILE.write_text(json.dumps({"code": code, "time": time.time()}), "utf-8")
+    LICENSE_FILE.write_text(json.dumps({
+        "code": code, "time": time.time(),
+        "days_left": days_left, "expires_at": expires_at
+    }), "utf-8")
 
 
 class AsyncThread(threading.Thread):
@@ -354,8 +357,10 @@ class ActivationScreen(Screen):
                     None, lambda: validate_license_online(code, device_id)
                 )
                 if result.get("valid"):
-                    save_license(code)
-                    Clock.schedule_once(lambda dt: self._on_success(), 0)
+                    days_left = result.get("days_left", -1)
+                    expires_at = result.get("expires_at")
+                    save_license(code, days_left, expires_at)
+                    Clock.schedule_once(lambda dt: self._on_success(days_left, expires_at), 0)
                 else:
                     err = result.get("error", "Invalid code")
                     Clock.schedule_once(lambda dt: self._on_fail(err), 0)
@@ -363,10 +368,16 @@ class ActivationScreen(Screen):
                 Clock.schedule_once(lambda dt: self._on_fail(str(e)[:80]), 0)
         run_async(_go())
 
-    def _on_success(self):
-        self.status.text = "[color=#4DFF88]Activated![/color]"
+    def _on_success(self, days_left=-1, expires_at=None):
+        if days_left and days_left > 0:
+            msg = f"[color=#4DFF88]Activated![/color]  [color=#FFD700]{days_left} days remaining[/color]"
+        elif days_left == -1:
+            msg = "[color=#4DFF88]Activated![/color]  [color=#FFD700]Lifetime license[/color]"
+        else:
+            msg = "[color=#4DFF88]Activated![/color]"
+        self.status.text = msg
         self.status.markup = True
-        Clock.schedule_once(lambda dt: setattr(self.manager, "current", "login"), 0.8)
+        Clock.schedule_once(lambda dt: setattr(self.manager, "current", "login"), 1.2)
 
     def _on_fail(self, err):
         self.status.text = f"[color=#FF4D4D]{err}[/color]"

@@ -29,43 +29,44 @@ CREATE TABLE IF NOT EXISTS activations (
 CREATE INDEX IF NOT EXISTS idx_licenses_code ON licenses(code);
 CREATE INDEX IF NOT EXISTS idx_activations_device ON activations(device_id);
 
--- 4. Function: validate a license code
+-- 4. Function: validate a license code (returns days_remaining)
 CREATE OR REPLACE FUNCTION validate_license(p_code TEXT, p_device_id TEXT)
 RETURNS JSON AS $$
 DECLARE
     v_license licenses%ROWTYPE;
     v_device_count INTEGER;
+    v_days_left INTEGER;
 BEGIN
-    -- Find the license
     SELECT * INTO v_license FROM licenses WHERE code = p_code AND is_active = TRUE;
 
     IF NOT FOUND THEN
         RETURN json_build_object('valid', false, 'error', 'Invalid code');
     END IF;
 
-    -- Check expiry
     IF v_license.expires_at IS NOT NULL AND v_license.expires_at < NOW() THEN
         RETURN json_build_object('valid', false, 'error', 'Code expired');
     END IF;
 
-    -- Check if this device is already activated
-    IF EXISTS (SELECT 1 FROM activations WHERE license_id = v_license.id AND device_id = p_device_id) THEN
-        -- Already activated, update last_check
-        UPDATE activations SET last_check = NOW() WHERE license_id = v_license.id AND device_id = p_device_id;
-        RETURN json_build_object('valid', true, 'message', 'Welcome back!');
+    IF v_license.expires_at IS NOT NULL THEN
+        v_days_left := EXTRACT(DAY FROM (v_license.expires_at - NOW()))::INTEGER;
+    ELSE
+        v_days_left := -1;
     END IF;
 
-    -- Check device limit
+    IF EXISTS (SELECT 1 FROM activations WHERE license_id = v_license.id AND device_id = p_device_id) THEN
+        UPDATE activations SET last_check = NOW() WHERE license_id = v_license.id AND device_id = p_device_id;
+        RETURN json_build_object('valid', true, 'message', 'Welcome back!', 'days_left', v_days_left, 'expires_at', v_license.expires_at);
+    END IF;
+
     SELECT COUNT(*) INTO v_device_count FROM activations WHERE license_id = v_license.id;
     IF v_device_count >= v_license.max_devices THEN
-        RETURN json_build_object('valid', false, 'error', 'Device limit reached (' || v_license.max_devices || ' max)');
+        RETURN json_build_object('valid', false, 'error', 'Device limit reached (1 device only)');
     END IF;
 
-    -- Activate this device
     INSERT INTO activations (license_id, device_id) VALUES (v_license.id, p_device_id);
     UPDATE licenses SET active_devices = active_devices + 1 WHERE id = v_license.id;
 
-    RETURN json_build_object('valid', true, 'message', 'Activated successfully!');
+    RETURN json_build_object('valid', true, 'message', 'Activated!', 'days_left', v_days_left, 'expires_at', v_license.expires_at);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -76,7 +77,6 @@ DECLARE
     v_code TEXT;
     v_expires TIMESTAMPTZ;
 BEGIN
-    -- Generate random code: TH-XXXX-XXXX-XXXX
     v_code := 'TH-' ||
               upper(substring(md5(random()::text) from 1 for 4)) || '-' ||
               upper(substring(md5(random()::text) from 1 for 4)) || '-' ||
@@ -105,17 +105,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 7. Enable RLS (Row Level Security)
+-- 7. Enable RLS
 ALTER TABLE licenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE activations ENABLE ROW LEVEL SECURITY;
 
--- 8. Public can only call the functions (not read tables directly)
 CREATE POLICY "Allow function calls" ON licenses FOR SELECT USING (FALSE);
 CREATE POLICY "Allow function calls" ON activations FOR SELECT USING (FALSE);
-
--- ============================================
--- RUN THESE AFTER TABLES ARE CREATED:
--- Go to Supabase > Settings > API
--- Copy the "anon" key and "URL"
--- Then update server/config.json
--- ============================================

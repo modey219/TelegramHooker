@@ -149,9 +149,9 @@ def load_license():
     return ""
 
 
-def save_license(code):
+def save_license(code, days_left=-1, expires_at=None):
     with open(LICENSE_FILE, "w") as f:
-        json.dump({"code": code, "time": time.time()}, f)
+        f.write(json.dumps({"code": code, "time": time.time(), "days_left": days_left, "expires_at": expires_at}))
 
 
 def _lighten(hex_color, factor=1.15):
@@ -248,9 +248,17 @@ class ActivationWindow:
     def _handle_result(self, result):
         if result.get("valid"):
             code = self.code_entry.get().strip().upper()
-            save_license(code)
-            self.status_label.config(text="Activated!", fg="#00b894")
-            self.root.after(1000, self.on_success)
+            days_left = result.get("days_left", -1)
+            expires_at = result.get("expires_at")
+            save_license(code, days_left, expires_at)
+            if days_left and days_left > 0:
+                msg = f"Activated! {days_left} days remaining"
+            elif days_left == -1:
+                msg = "Activated! Lifetime license"
+            else:
+                msg = "Activated!"
+            self.status_label.config(text=msg, fg="#00b894")
+            self.root.after(1500, self.on_success)
         else:
             err = result.get("error", "Invalid code")
             self.status_label.config(text=err, fg="#ff4d4d")
