@@ -1,4 +1,4 @@
-import os, sys, asyncio, threading, json, base64, hashlib, time, traceback
+import os, sys, asyncio, threading, json, base64, hashlib, time, traceback, uuid
 from pathlib import Path
 
 _CRASH_LOG = Path("/sdcard/Download/crash.log")
@@ -48,7 +48,7 @@ from kivy.metrics import dp
 from kivy.utils import platform
 
 APP_NAME = "Telegram Hooker"
-APP_VERSION = "2.0"
+APP_VERSION = "3.0"
 COPYRIGHT = "@ASEQX12"
 
 BG = (0.05, 0.05, 0.10, 1)
@@ -68,6 +68,10 @@ CONFIG_DIR = HOME / ".telegram_hooker"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 SESSIONS_DIR = CONFIG_DIR / "sessions"
 KEY_FILE = CONFIG_DIR / ".key"
+LICENSE_FILE = CONFIG_DIR / ".license"
+
+SUPABASE_URL = "YOUR_SUPABASE_URL_HERE"
+SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY_HERE"
 
 if platform == "android":
     try:
@@ -81,6 +85,43 @@ if platform == "android":
         ])
     except Exception:
         pass
+
+
+def get_device_id():
+    try:
+        if platform == "android":
+            from jnius import autoclass
+            Settings = autoclass('android.provider.Settings')
+            activity = autoclass('org.kivy.android.PythonActivity').mActivity
+            android_id = Settings.Secure.getString(
+                activity.getContentResolver(),
+                Settings.Secure.ANDROID_ID
+            )
+            if android_id and android_id != "unknown":
+                return hashlib.sha256(android_id.encode()).hexdigest()[:32]
+        import platform as pf
+        machine_id = str(uuid.getnode())
+        return hashlib.sha256(machine_id.encode()).hexdigest()[:32]
+    except Exception:
+        return hashlib.sha256(str(uuid.getnode()).encode()).hexdigest()[:32]
+
+
+def validate_license_online(code, device_id):
+    import urllib.request, urllib.error
+    url = f"{SUPABASE_URL}/rest/rpc/validate_license"
+    payload = json.dumps({"p_code": code, "p_device_id": device_id}).encode("utf-8")
+    req = urllib.request.Request(url, data=payload, method="POST")
+    req.add_header("apikey", SUPABASE_ANON_KEY)
+    req.add_header("Authorization", f"Bearer {SUPABASE_ANON_KEY}")
+    req.add_header("Content-Type", "application/json")
+    try:
+        resp = urllib.request.urlopen(req, timeout=15)
+        return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        return {"valid": False, "error": f"Server error: {e.code}"}
+    except Exception as e:
+        return {"valid": False, "error": f"Connection failed: {str(e)[:60]}"}
 
 
 class Cipher:
@@ -159,6 +200,21 @@ def save_config(cfg):
     CONFIG_FILE.write_text(json.dumps(enc, indent=2), "utf-8")
 
 
+def load_license():
+    if LICENSE_FILE.exists():
+        try:
+            raw = json.loads(LICENSE_FILE.read_text("utf-8"))
+            return raw.get("code", "")
+        except Exception:
+            return ""
+    return ""
+
+
+def save_license(code):
+    ensure_dirs()
+    LICENSE_FILE.write_text(json.dumps({"code": code, "time": time.time()}), "utf-8")
+
+
 class AsyncThread(threading.Thread):
     def __init__(self):
         super().__init__(daemon=True)
@@ -224,6 +280,108 @@ def draw_card(w):
         RoundedRectangle(pos=w.pos, size=w.size, radius=[dp_(12)])
 
 
+def _draw_top(w):
+    w.canvas.before.clear()
+    with w.canvas.before:
+        Color(*ACCENT[:3], 0.08)
+        RoundedRectangle(pos=w.pos, size=w.size, radius=[dp_(20)])
+
+
+class ActivationScreen(Screen):
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        layout = BoxLayout(orientation="vertical", padding=dp_(24), spacing=dp_(8))
+
+        scroll = ScrollView()
+        sc = BoxLayout(orientation="vertical", spacing=dp_(10), size_hint_y=None)
+        sc.bind(minimum_height=sc.setter("height"))
+
+        top = BoxLayout(orientation="vertical", size_hint_y=None, height=dp_(160))
+        top.bind(pos=lambda i, v: _draw_top(i))
+        top.bind(size=lambda i, v: _draw_top(i))
+        top.add_widget(Label(
+            text="[b][color=#40A8FF]TELEGRAM[/color] [color=#FFFFFF]HOOKER[/color][/b]",
+            markup=True, font_size=dp_(28),
+        ))
+        top.add_widget(Label(
+            text=f"v{APP_VERSION}  |  {COPYRIGHT}", font_size=dp_(13), color=DIM,
+        ))
+        top.add_widget(Label(
+            text="[color=#FFD700]Activation Required[/color]", markup=True,
+            font_size=dp_(14),
+        ))
+        sc.add_widget(top)
+
+        sc.add_widget(Label(text="[color=#40A8FF]Enter your activation code[/color]", markup=True,
+                           font_size=dp_(13), size_hint_y=None, height=dp_(20)))
+
+        self.code_input = StyledInput("TH-XXXX-XXXX-XXXX")
+        sc.add_widget(self.code_input)
+
+        sc.add_widget(StyledButton("ACTIVATE", GREEN, self.do_activate, dp_(52), 16))
+
+        self.status = Label(text="", font_size=dp_(13), color=YELLOW,
+                           size_hint_y=None, height=dp_(40))
+        sc.add_widget(self.status)
+
+        sc.add_widget(Label(
+            text="[color=#808090]Get your code from @ASEQX12[/color]", markup=True,
+            font_size=dp_(11), size_hint_y=None, height=dp_(20)))
+
+        if _CRASH_LOG.exists():
+            sc.add_widget(StyledButton("VIEW CRASH LOG", RED, self._show_crash, dp_(36), 11))
+
+        scroll.add_widget(sc)
+        layout.add_widget(scroll)
+        self.add_widget(layout)
+
+    def do_activate(self, *a):
+        code = self.code_input.text.strip().upper()
+        if not code:
+            self.status.text = "[color=#FF4D4D]Enter a code[/color]"
+            self.status.markup = True
+            return
+
+        self.status.text = "[color=#FFD700]Validating...[/color]"
+        self.status.markup = True
+        Clock.schedule_once(lambda dt: self._validate(code), 0.1)
+
+    def _validate(self, code):
+        async def _go():
+            try:
+                device_id = get_device_id()
+                result = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: validate_license_online(code, device_id)
+                )
+                if result.get("valid"):
+                    save_license(code)
+                    Clock.schedule_once(lambda dt: self._on_success(), 0)
+                else:
+                    err = result.get("error", "Invalid code")
+                    Clock.schedule_once(lambda dt: self._on_fail(err), 0)
+            except Exception as e:
+                Clock.schedule_once(lambda dt: self._on_fail(str(e)[:80]), 0)
+        run_async(_go())
+
+    def _on_success(self):
+        self.status.text = "[color=#4DFF88]Activated![/color]"
+        self.status.markup = True
+        Clock.schedule_once(lambda dt: setattr(self.manager, "current", "login"), 0.8)
+
+    def _on_fail(self, err):
+        self.status.text = f"[color=#FF4D4D]{err}[/color]"
+        self.status.markup = True
+
+    def _show_crash(self, *a):
+        try:
+            crash_text = _CRASH_LOG.read_text("utf-8")[-300:]
+            self.status.text = f"[color=#FF4D4D]{crash_text[:80]}[/color]"
+            self.status.markup = True
+        except Exception:
+            self.status.text = "[color=#FF4D4D]No crash log found[/color]"
+            self.status.markup = True
+
+
 class LoginScreen(Screen):
     def __init__(self, **kw):
         super().__init__(**kw)
@@ -261,13 +419,6 @@ class LoginScreen(Screen):
         self.status = Label(text="", font_size=dp_(13), color=YELLOW,
                            size_hint_y=None, height=dp_(28))
         sc.add_widget(self.status)
-
-        if _CRASH_LOG.exists():
-            try:
-                crash_text = _CRASH_LOG.read_text("utf-8")[-200:]
-                sc.add_widget(StyledButton("VIEW CRASH LOG", RED, self._show_crash))
-            except Exception:
-                pass
 
         sc.add_widget(Label(text=f"  {COPYRIGHT} - All Rights Reserved",
                            font_size=dp_(11), color=DIM2,
@@ -328,15 +479,6 @@ class LoginScreen(Screen):
         self.status.markup = True
         Clock.schedule_once(lambda dt: self._restore(sessions[-1]), 0.1)
 
-    def _show_crash(self, *a):
-        try:
-            crash_text = _CRASH_LOG.read_text("utf-8")[-300:]
-            self.status.text = f"[color=#FF4D4D]{crash_text[:80]}[/color]"
-            self.status.markup = True
-        except Exception:
-            self.status.text = "[color=#FF4D4D]No crash log found[/color]"
-            self.status.markup = True
-
     def _restore(self, name):
         async def _go():
             try:
@@ -352,13 +494,6 @@ class LoginScreen(Screen):
             except Exception as e:
                 Clock.schedule_once(lambda dt: self._err(str(e)), 0)
         run_async(_go())
-
-
-def _draw_top(w):
-    w.canvas.before.clear()
-    with w.canvas.before:
-        Color(*ACCENT[:3], 0.08)
-        RoundedRectangle(pos=w.pos, size=w.size, radius=[dp_(20)])
 
 
 class MainScreen(Screen):
@@ -463,10 +598,10 @@ class MainScreen(Screen):
             self.engine_lbl.text = "Engine: READY (ntgcalls + pytgcalls)"
             self.engine_lbl.color = GREEN
             self.log("Voice engine loaded!", GREEN)
-        except Exception as e:
+        except Exception:
             self.engine_lbl.text = "Engine: Not installed (optional)"
             self.engine_lbl.color = YELLOW
-            self.log(f"Voice engine not available", ORANGE)
+            self.log("Voice engine not available", ORANGE)
 
     def do_start_engine(self, *a):
         self.log("Checking voice engine...", YELLOW)
@@ -668,13 +803,13 @@ class SettingsScreen(Screen):
             import pytgcalls
             sc.add_widget(info("ntgcalls: OK", GREEN, 11))
             sc.add_widget(info("pytgcalls: OK", GREEN, 11))
-        except Exception as e:
-            sc.add_widget(info(f"Not available (optional)", ORANGE, 11))
+        except Exception:
+            sc.add_widget(info("Not available (optional)", ORANGE, 11))
         sc.add_widget(info("Audio: PulseAudio + ALSA", DIM, 11))
         sc.add_widget(info("Codec: Opus 48kHz", DIM, 11))
 
         sc.add_widget(section("Security"))
-        sc.add_widget(info("AES-256-GCM encryption", GREEN, 11))
+        sc.add_widget(info("Activation verified (Supabase)", GREEN, 11))
         sc.add_widget(info("API keys encrypted on device", GREEN, 11))
         sc.add_widget(info("Session files local only", GREEN, 11))
 
@@ -682,7 +817,6 @@ class SettingsScreen(Screen):
         sc.add_widget(info(f"{APP_NAME} v{APP_VERSION}", WHITE, 13))
         sc.add_widget(info(f"Copyright {COPYRIGHT} - All Rights Reserved", DIM, 12))
         sc.add_widget(info("Kivy + Pyrogram + PyTgCalls", DIM, 10))
-        sc.add_widget(info("Native Telegram voice engine", DIM, 10))
 
         sc.add_widget(Label(text="", size_hint_y=None, height=dp_(20)))
         sc.add_widget(info(f"  {COPYRIGHT} 2026", DIM2, 11))
@@ -715,9 +849,21 @@ class TelegramHookerApp(App):
             pass
 
         sm = ScreenManager(transition=SlideTransition(direction="left", duration=0.2))
-        sm.add_widget(LoginScreen(name="login"))
-        sm.add_widget(MainScreen(name="main"))
-        sm.add_widget(SettingsScreen(name="settings"))
+
+        saved_code = load_license()
+        if saved_code:
+            sm.add_widget(ActivationScreen(name="activation"))
+            sm.add_widget(LoginScreen(name="login"))
+            sm.add_widget(MainScreen(name="main"))
+            sm.add_widget(SettingsScreen(name="settings"))
+            sm.current = "login"
+        else:
+            sm.add_widget(ActivationScreen(name="activation"))
+            sm.add_widget(LoginScreen(name="login"))
+            sm.add_widget(MainScreen(name="main"))
+            sm.add_widget(SettingsScreen(name="settings"))
+            sm.current = "activation"
+
         return sm
 
     def on_pause(self):
