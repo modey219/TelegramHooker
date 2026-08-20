@@ -41,8 +41,8 @@ CONFIG_FILE = "hooker_light_config.json"
 LICENSE_FILE = "hooker_light.license"
 ADMIN_SECRET = "ASEQX12"
 
-SUPABASE_URL = "YOUR_SUPABASE_URL_HERE"
-SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY_HERE"
+SUPABASE_URL = "https://wsvvxmsgarpwbjbbskar.supabase.co"
+SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndzdnZ4bXNnYXJwd2JqYmJza2FyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNDIyNTMsImV4cCI6MjEwMjgxODI1M30.Ds2Xi3Q5P6HIF4mG2TrsLQlqxeww80V8LHWzt9fQRA8"
 
 
 def get_machine_id():
