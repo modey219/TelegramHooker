@@ -10,24 +10,46 @@ jobs:
   build:
     name: Build APK
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    container:
+      image: kivy/buildozer:latest
+      options: --user root
+    timeout-minutes: 240
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build with Buildozer
-        uses: ArtemSBulgakov/buildozer-action@v1
-        id: buildozer
+      - name: Build APK
+        run: |
+          yes | buildozer android debug 2>&1 | tee build.log
+          EXIT=${PIPESTATUS[0]}
+          echo "Buildozer exit code: $EXIT"
+          echo ""
+          echo "=== ERRORS ==="
+          grep -n -i "error\|exception\|traceback\|failed\|IndexError" build.log | grep -v "^#" | grep -v "ecma-builtin" | tail -30 || true
+          echo ""
+          echo "=== Last 100 lines ==="
+          tail -100 build.log
+          echo ""
+          echo "=== .apk files ==="
+          find . -name "*.apk" -exec ls -lh {} \; 2>/dev/null || true
+          echo "=== bin/ ==="
+          ls -laR bin/ 2>/dev/null || true
+          exit $EXIT
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          workdir: .
-          buildozer_version: stable
-          command: android debug
+          name: build-log-${{ github.run_number }}
+          path: build.log
+          retention-days: 30
 
       - name: Upload APK
-        if: steps.buildozer.outputs.filename != ''
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: TelegramHooker-v${{ github.run_number }}
-          path: ${{ steps.buildozer.outputs.filename }}
+          path: bin/*.apk
           retention-days: 30
+          if-no-files-found: ignore
