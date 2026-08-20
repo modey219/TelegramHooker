@@ -14,6 +14,8 @@ jobs:
       image: kivy/buildozer:latest
       options: --user root
     timeout-minutes: 240
+    env:
+      DEBIAN_FRONTEND: noninteractive
 
     steps:
       - name: Checkout
@@ -21,21 +23,15 @@ jobs:
 
       - name: Build APK
         run: |
-          yes | buildozer android debug 2>&1 | tee build.log
-          EXIT=${PIPESTATUS[0]}
-          echo "Buildozer exit code: $EXIT"
-          echo ""
-          echo "=== ERRORS ==="
-          grep -n -i "error\|exception\|traceback\|failed\|IndexError" build.log | grep -v "^#" | grep -v "ecma-builtin" | tail -30 || true
-          echo ""
-          echo "=== Last 100 lines ==="
-          tail -100 build.log
+          buildozer android debug 2>&1 | tee build.log
+          echo "Buildozer exit code: ${PIPESTATUS[0]}"
           echo ""
           echo "=== .apk files ==="
           find . -name "*.apk" -exec ls -lh {} \; 2>/dev/null || true
           echo "=== bin/ ==="
           ls -laR bin/ 2>/dev/null || true
-          exit $EXIT
+          echo "=== Last 50 lines ==="
+          tail -50 build.log
 
       - name: Upload build log
         if: always()
@@ -52,4 +48,4 @@ jobs:
           name: TelegramHooker-v${{ github.run_number }}
           path: bin/*.apk
           retention-days: 30
-          if-no-files-found: ignore
+          if-no-files-found: warn
