@@ -26,20 +26,6 @@ Telegram voice call control tool for Android and iOS.
 2. Download the latest APK (Android) or IPA (iOS)
 3. Install and open
 
-## Build from source
-
-### Android
-
-```bash
-pip install buildozer
-cd android
-buildozer android debug
-```
-
-### iOS
-
-Open `ios/TelegramHooker.xcodeproj` in Xcode and build.
-
 ## Requirements
 
 - Telegram API credentials from [my.telegram.org](https://my.telegram.org)
