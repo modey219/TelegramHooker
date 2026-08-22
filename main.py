@@ -587,6 +587,19 @@ class LoginScreen(Screen):
         self.status.text = f"[color=#FF4D4D]{e[:80]}[/color]"
         self.status.markup = True
 
+    def on_enter(self):
+        def _check():
+            try:
+                code, dev = load_license()
+                if code and dev:
+                    result = validate_license_online(code, dev)
+                    if not result.get("valid"):
+                        Clock.schedule_once(lambda dt: setattr(
+                            self.manager, "current", "activation"), 0)
+            except Exception:
+                pass
+        threading.Thread(target=_check, daemon=True).start()
+
     def do_restore(self, *a):
         sessions = [f.stem for f in SESSIONS_DIR.glob("*.session")]
         if not sessions:
@@ -622,6 +635,7 @@ class MainScreen(Screen):
         self.client = None
         self.current_chat_id = None
         self.is_muted = False
+        self._license_check_event = None
         self._build_ui()
 
     def _build_ui(self):
@@ -724,6 +738,44 @@ class MainScreen(Screen):
         if user:
             self.status_lbl.text = f"Logged in: {user}"
         self._check_engine()
+        self._start_license_check()
+
+    def on_leave(self):
+        self._stop_license_check()
+
+    def _start_license_check(self):
+        self._stop_license_check()
+        self._do_license_check()
+
+    def _stop_license_check(self):
+        if self._license_check_event is not None:
+            try:
+                self._license_check_event.cancel()
+            except Exception:
+                pass
+            self._license_check_event = None
+
+    def _do_license_check(self):
+        def _go():
+            try:
+                code, dev = load_license()
+                if not code or not dev:
+                    Clock.schedule_once(lambda dt: self._kick_to_activation(), 0)
+                    return
+                result = validate_license_online(code, dev)
+                if not result.get("valid"):
+                    Clock.schedule_once(lambda dt: self._kick_to_activation(), 0)
+                else:
+                    self._license_check_event = Clock.schedule_once(
+                        lambda dt: self._do_license_check(), 60)
+            except Exception:
+                self._license_check_event = Clock.schedule_once(
+                    lambda dt: self._do_license_check(), 120)
+        threading.Thread(target=_go, daemon=True).start()
+
+    def _kick_to_activation(self):
+        self.log("License revoked! Returning to activation...", RED)
+        Clock.schedule_once(lambda dt: setattr(self.manager, "current", "activation"), 0.5)
 
     def _check_engine(self):
         try:
