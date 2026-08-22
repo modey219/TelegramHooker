@@ -161,7 +161,8 @@ class LoginScreen(Screen):
                 save_config({"api_id": api_id, "api_hash": api_hash, "phone": phone})
                 Clock.schedule_once(lambda dt: self._on_success(), 0)
             except Exception as e:
-                Clock.schedule_once(lambda dt: self._on_error(str(e)), 0)
+                _emsg = str(e)
+                Clock.schedule_once(lambda dt, m=_emsg: self._on_error(m), 0)
         run_async(_login())
 
     def _on_success(self):
@@ -189,7 +190,8 @@ class LoginScreen(Screen):
                 else:
                     Clock.schedule_once(lambda dt: self._on_error("Session not authorized"), 0)
             except Exception as e:
-                Clock.schedule_once(lambda dt: self._on_error(str(e)), 0)
+                _emsg = str(e)
+                Clock.schedule_once(lambda dt, m=_emsg: self._on_error(m), 0)
         run_async(_restore())
 
 
@@ -291,7 +293,8 @@ class MainScreen(Screen):
                 await self.voice.join(target)
                 Clock.schedule_once(lambda dt: self._update_status("In call"), 0)
             except Exception as e:
-                Clock.schedule_once(lambda dt: self.log(f"Error: {str(e)[:100]}"), 0)
+                _emsg = str(e)[:100]
+                Clock.schedule_once(lambda dt, m=_emsg: self.log(f"Error: {m}"), 0)
         run_async(_join())
 
     def do_mute(self, *a):

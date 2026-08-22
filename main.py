@@ -461,7 +461,8 @@ class ActivationScreen(Screen):
                     Clock.schedule_once(lambda dt: self._on_fail(err), 0)
             except Exception as e:
                 _write_crash(traceback.format_exc())
-                Clock.schedule_once(lambda dt: self._on_fail(str(e)[:80]), 0)
+                _emsg = str(e)[:80]
+                Clock.schedule_once(lambda dt, m=_emsg: self._on_fail(m), 0)
         threading.Thread(target=_go, daemon=True).start()
 
     def _on_success(self, expires_at=None):
@@ -573,7 +574,8 @@ class LoginScreen(Screen):
                             "username": me.username or "", "name": me.first_name or ""})
                 Clock.schedule_once(lambda dt: self._ok(me), 0)
             except Exception as e:
-                Clock.schedule_once(lambda dt: self._err(str(e)), 0)
+                _emsg = str(e)
+                Clock.schedule_once(lambda dt, m=_emsg: self._err(m), 0)
         run_async(_go())
 
     def _ok(self, me):
@@ -609,7 +611,8 @@ class LoginScreen(Screen):
                 save_config({**cfg, "username": me.username or "", "name": me.first_name or ""})
                 Clock.schedule_once(lambda dt: self._ok(me), 0)
             except Exception as e:
-                Clock.schedule_once(lambda dt: self._err(str(e)), 0)
+                _emsg = str(e)
+                Clock.schedule_once(lambda dt, m=_emsg: self._err(m), 0)
         run_async(_go())
 
 
@@ -804,7 +807,8 @@ class MainScreen(Screen):
                 self.current_chat_id = chat_id
                 Clock.schedule_once(lambda dt: self._on_joined(chat_id, target), 0)
             except Exception as e:
-                Clock.schedule_once(lambda dt: self.log(f"Error: {str(e)[:120]}", RED), 0)
+                _emsg = str(e)[:120]
+                Clock.schedule_once(lambda dt, m=_emsg: self.log(f"Error: {m}", RED), 0)
         run_async(_go())
 
     def _on_joined(self, chat_id, target):
@@ -881,7 +885,8 @@ class MainScreen(Screen):
                 self.msg_input.text = ""
                 Clock.schedule_once(lambda dt: self.log(f"Sent to {target}", GREEN), 0)
             except Exception as e:
-                Clock.schedule_once(lambda dt: self.log(f"Error: {str(e)[:80]}", RED), 0)
+                _emsg = str(e)[:80]
+                Clock.schedule_once(lambda dt, m=_emsg: self.log(f"Error: {m}", RED), 0)
         run_async(_go())
 
     def do_logout(self, *a):
