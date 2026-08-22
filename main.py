@@ -387,6 +387,61 @@ def _draw_top(w):
         RoundedRectangle(pos=w.pos, size=w.size, radius=[dp_(20)])
 
 
+class LoadingScreen(Screen):
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        root = BoxLayout(orientation="vertical")
+        with root.canvas.before:
+            Color(0.04, 0.06, 0.08, 1)
+            from kivy.graphics import Rectangle
+            self._bg = Rectangle(pos=root.pos, size=root.size)
+            root.bind(pos=lambda i, v: setattr(self._bg, 'pos', v))
+            root.bind(size=lambda i, v: setattr(self._bg, 'size', v))
+
+        center_box = BoxLayout(orientation="vertical", spacing=dp_(16), size_hint=(0.7, 0.5), pos_hint={"center_x": 0.5, "center_y": 0.5})
+
+        with center_box.canvas.before:
+            Color(0.08, 0.10, 0.14, 0.8)
+            self._card = RoundedRectangle(pos=center_box.pos, size=center_box.size, radius=[dp_(20)])
+            center_box.bind(pos=lambda i, v: setattr(self._card, 'pos', v))
+            center_box.bind(size=lambda i, v: setattr(self._card, 'size', v))
+
+        logo = Label(text="[b][color=#40A8FF]TELEGRAM[/color]\n[color=#FFFFFF]HOOKER[/color][/b]",
+                     markup=True, font_size=dp_(32), halign="center",
+                     size_hint_y=None, height=dp_(80))
+        center_box.add_widget(logo)
+
+        ver = Label(text=f"v{APP_VERSION}", font_size=dp_(13), color=DIM,
+                    size_hint_y=None, height=dp_(20))
+        center_box.add_widget(ver)
+
+        self._dots_label = Label(text="", font_size=dp_(14), color=ACCENT,
+                                 size_hint_y=None, height=dp_(25))
+        center_box.add_widget(self._dots_label)
+
+        center_box.add_widget(Label(size_hint_y=1))
+        root.add_widget(center_box)
+        self.add_widget(root)
+
+        self._dot_count = 0
+        self._anim_event = None
+
+    def on_enter(self):
+        self._dot_count = 0
+        self._animate()
+
+    def on_leave(self):
+        if self._anim_event:
+            try: self._anim_event.cancel()
+            except: pass
+            self._anim_event = None
+
+    def _animate(self):
+        self._dot_count = (self._dot_count % 3) + 1
+        self._dots_label.text = f"Loading{'.' * self._dot_count}"
+        self._anim_event = Clock.schedule_once(lambda dt: self._animate(), 0.4)
+
+
 class ActivationScreen(Screen):
     def __init__(self, **kw):
         super().__init__(**kw)
@@ -1051,19 +1106,24 @@ class TelegramHookerApp(App):
 
         sm = ScreenManager(transition=SlideTransition(direction="left", duration=0.2))
 
-        saved_code, saved_device = load_license()
-        device_id = get_device_id()
-        license_ok = saved_code and saved_device == device_id
-
+        sm.add_widget(LoadingScreen(name="loading"))
         sm.add_widget(ActivationScreen(name="activation"))
         sm.add_widget(LoginScreen(name="login"))
         sm.add_widget(MainScreen(name="main"))
         sm.add_widget(SettingsScreen(name="settings"))
 
-        if license_ok:
-            sm.current = "login"
-        else:
-            sm.current = "activation"
+        sm.current = "loading"
+
+        def _init_app(dt):
+            saved_code, saved_device = load_license()
+            device_id = get_device_id()
+            license_ok = saved_code and saved_device == device_id
+            if license_ok:
+                sm.current = "login"
+            else:
+                sm.current = "activation"
+
+        Clock.schedule_once(_init_app, 2.0)
 
         return sm
 
