@@ -390,79 +390,98 @@ def _draw_top(w):
 class LoadingScreen(Screen):
     def __init__(self, **kw):
         super().__init__(**kw)
+        from kivy.graphics import Rectangle, Ellipse, Line
         root = BoxLayout(orientation="vertical")
+
         with root.canvas.before:
-            Color(0.04, 0.06, 0.08, 1)
-            from kivy.graphics import Rectangle
+            Color(0.03, 0.05, 0.07, 1)
             self._bg = Rectangle(pos=root.pos, size=root.size)
             root.bind(pos=lambda i, v: setattr(self._bg, 'pos', v))
             root.bind(size=lambda i, v: setattr(self._bg, 'size', v))
 
-        center = BoxLayout(orientation="vertical", spacing=dp_(14),
-                          size_hint=(0.75, 0.55),
+        center = BoxLayout(orientation="vertical", spacing=dp_(10),
+                          size_hint=(0.78, 0.6),
                           pos_hint={"center_x": 0.5, "center_y": 0.5})
 
         self._glow_color = Color(0.25, 0.65, 1.0, 0.0)
         with center.canvas.before:
             self._glow_rect_color = self._glow_color
             self._glow_rect = RoundedRectangle(
-                pos=(center.x - dp_(4), center.y - dp_(4)),
-                size=(center.width + dp_(8), center.height + dp_(8)),
-                radius=[dp_(24)])
+                pos=(center.x - dp_(5), center.y - dp_(5)),
+                size=(center.width + dp_(10), center.height + dp_(10)),
+                radius=[dp_(26)])
             center.bind(pos=lambda i, v: self._update_glow(center))
             center.bind(size=lambda i, v: self._update_glow(center))
 
-        self._card_color = Color(0.08, 0.10, 0.14, 0.9)
         with center.canvas.before:
-            Color(0.08, 0.10, 0.14, 0.9)
+            Color(0.07, 0.09, 0.12, 0.92)
             self._card = RoundedRectangle(pos=center.pos, size=center.size, radius=[dp_(20)])
             center.bind(pos=lambda i, v: setattr(self._card, 'pos', v))
             center.bind(size=lambda i, v: setattr(self._card, 'size', v))
 
-        center.add_widget(Label(size_hint_y=0.15))
+        center.add_widget(Label(size_hint_y=0.08))
 
-        shield = Label(text="[b][color=#40A8FF]\u2699[/color][/b]",
-                       markup=True, font_size=dp_(48),
-                       size_hint_y=None, height=dp_(60))
-        center.add_widget(shield)
+        icon_box = BoxLayout(size_hint_y=None, height=dp_(70), size_hint_x=0.3,
+                            pos_hint={"center_x": 0.5})
+        self._icon_label = Label(
+            text="[b][color=#40A8FF]\U0001F517[/color][/b]",
+            markup=True, font_size=dp_(52), halign="center", valign="center")
+        self._icon_label.bind(size=self._icon_label.setter('text_size'))
+        icon_box.add_widget(self._icon_label)
+        center.add_widget(icon_box)
 
-        center.add_widget(Label(size_hint_y=0.05))
+        center.add_widget(Label(size_hint_y=0.02))
 
-        title = Label(text="[b][color=#40A8FF]TELEGRAM[/color] [color=#FFFFFF]HOOKER[/color][/b]",
-                      markup=True, font_size=dp_(30),
-                      size_hint_y=None, height=dp_(45))
-        center.add_widget(title)
+        self._title_label = Label(
+            text="[b][color=#40A8FF]TELEGRAM[/color] [color=#FFFFFF]HOOKER[/color][/b]",
+            markup=True, font_size=dp_(32), halign="center",
+            size_hint_y=None, height=dp_(48))
+        center.add_widget(self._title_label)
 
-        ver = Label(text=f"v{APP_VERSION}  |  {COPYRIGHT}",
-                    font_size=dp_(11), color=DIM,
-                    size_hint_y=None, height=dp_(18))
+        ver = Label(text=f"v{APP_VERSION}", font_size=dp_(12), color=DIM,
+                    size_hint_y=None, height=dp_(18), halign="center")
         center.add_widget(ver)
+
+        credit = Label(text=f"\u00A9 {COPYRIGHT}", font_size=dp_(10), color=DIM2,
+                       size_hint_y=None, height=dp_(16), halign="center")
+        center.add_widget(credit)
+
+        center.add_widget(Label(size_hint_y=0.06))
+
+        bar_outer = BoxLayout(size_hint_y=None, height=dp_(8),
+                             size_hint_x=0.85, pos_hint={"center_x": 0.5})
+        with bar_outer.canvas.before:
+            Color(0.12, 0.14, 0.18, 1)
+            self._bar_bg = RoundedRectangle(pos=bar_outer.pos, size=bar_outer.size, radius=[dp_(4)])
+            bar_outer.bind(pos=lambda i, v: setattr(self._bar_bg, 'pos', v))
+            bar_outer.bind(size=lambda i, v: setattr(self._bar_bg, 'size', v))
+
+        self._bar_inner = BoxLayout()
+        with self._bar_inner.canvas.before:
+            self._bar_color = Color(0.25, 0.65, 1.0, 1)
+            self._bar_rect = RoundedRectangle(pos=(0, 0), size=(dp_(8), dp_(8)), radius=[dp_(4)])
+            self._bar_inner.bind(pos=lambda i, v: setattr(self._bar_rect, 'pos', v))
+        bar_outer.add_widget(self._bar_inner)
+        center.add_widget(bar_outer)
+
+        center.add_widget(Label(size_hint_y=0.03))
+
+        self._pct_label = Label(text="0%", font_size=dp_(11), color=ACCENT,
+                                size_hint_y=None, height=dp_(16), halign="center")
+        center.add_widget(self._pct_label)
+
+        self._status = Label(text="Initializing...",
+                             font_size=dp_(13), color=DIM,
+                             size_hint_y=None, height=dp_(22), halign="center")
+        center.add_widget(self._status)
 
         center.add_widget(Label(size_hint_y=0.08))
 
-        bar_bg = BoxLayout(size_hint_y=None, height=dp_(6),
-                          size_hint_x=0.8, pos_hint={"center_x": 0.5})
-        with bar_bg.canvas.before:
-            Color(0.15, 0.17, 0.22, 1)
-            self._bar_bg = RoundedRectangle(pos=bar_bg.pos, size=bar_bg.size, radius=[dp_(3)])
-            bar_bg.bind(pos=lambda i, v: setattr(self._bar_bg, 'pos', v))
-            bar_bg.bind(size=lambda i, v: setattr(self._bar_bg, 'size', v))
-        self._bar_fill = BoxLayout()
-        with self._bar_fill.canvas.before:
-            Color(0.25, 0.65, 1.0, 1)
-            self._bar_rect = RoundedRectangle(pos=self._bar_fill.pos, size=(0, dp_(6)), radius=[dp_(3)])
-            self._bar_fill.bind(pos=lambda i, v: setattr(self._bar_rect, 'pos', v))
-        bar_bg.add_widget(self._bar_fill)
-        center.add_widget(bar_bg)
+        powered = Label(text="[color=#333344]Powered by Pyrogram + PyTgCalls[/color]",
+                        markup=True, font_size=dp_(9), halign="center",
+                        size_hint_y=None, height=dp_(14))
+        center.add_widget(powered)
 
-        center.add_widget(Label(size_hint_y=0.04))
-
-        self._status = Label(text="Initializing...",
-                             font_size=dp_(12), color=DIM,
-                             size_hint_y=None, height=dp_(20))
-        center.add_widget(self._status)
-
-        center.add_widget(Label(size_hint_y=0.12))
         root.add_widget(center)
         self.add_widget(root)
 
@@ -470,19 +489,22 @@ class LoadingScreen(Screen):
         self._glow_dir = 1
         self._bar_progress = 0.0
         self._anim_event = None
-        self._step = 0
+        self._icon_angle = 0
+        self._pulse = 0.0
+        self._pulse_dir = 1
 
     def _update_glow(self, center):
-        a = self._glow_alpha
-        self._glow_rect.pos = (center.x - dp_(4), center.y - dp_(4))
-        self._glow_rect.size = (center.width + dp_(8), center.height + dp_(8))
-        self._glow_color.a = a * 0.35
+        self._glow_rect.pos = (center.x - dp_(5), center.y - dp_(5))
+        self._glow_rect.size = (center.width + dp_(10), center.height + dp_(10))
+        self._glow_color.a = self._glow_alpha * 0.4
 
     def on_enter(self):
         self._glow_alpha = 0.0
         self._glow_dir = 1
         self._bar_progress = 0.0
-        self._step = 0
+        self._icon_angle = 0
+        self._pulse = 0.0
+        self._pulse_dir = 1
         self._animate()
 
     def on_leave(self):
@@ -492,7 +514,7 @@ class LoadingScreen(Screen):
             self._anim_event = None
 
     def _animate(self):
-        self._glow_alpha += self._glow_dir * 0.06
+        self._glow_alpha += self._glow_dir * 0.05
         if self._glow_alpha >= 1.0:
             self._glow_alpha = 1.0
             self._glow_dir = -1
@@ -500,27 +522,55 @@ class LoadingScreen(Screen):
             self._glow_alpha = 0.0
             self._glow_dir = 1
 
-        self._bar_progress = min(1.0, self._bar_progress + 0.035)
-        w = max(1, int(self._bar_fill.parent.width * self._bar_progress))
-        self._bar_rect.size = (w, dp_(6))
+        self._pulse += self._pulse_dir * 0.03
+        if self._pulse >= 1.0:
+            self._pulse = 1.0
+            self._pulse_dir = -1
+        elif self._pulse <= 0.0:
+            self._pulse = 0.0
+            self._pulse_dir = 1
 
-        steps = [
-            (0.15, "Checking device..."),
-            (0.35, "Verifying license..."),
-            (0.55, "Loading modules..."),
-            (0.75, "Preparing interface..."),
-            (0.95, "Almost ready..."),
-            (1.0, "Starting..."),
-        ]
-        for thresh, txt in steps:
-            if self._bar_progress < thresh:
-                self._status.text = txt
-                break
+        icon_icons = ["\U0001F517", "\U0001F512", "\U0001F4E1", "\U0001F6E1"]
+        self._icon_angle += 3
+        idx = (self._icon_angle // 90) % len(icon_icons)
+        self._icon_label.text = f"[b][color=#40A8FF]{icon_icons[idx]}[/color][/b]"
+
+        base_fs = dp_(32)
+        pulse_fs = base_fs + dp_(int(self._pulse * 3))
+        self._title_label.font_size = pulse_fs
+
+        if self._bar_progress < 0.85:
+            self._bar_progress = min(0.85, self._bar_progress + 0.008)
+        elif self._bar_progress < 1.0:
+            self._bar_progress = min(1.0, self._bar_progress + 0.003)
+
+        w = max(dp_(8), int(self._bar_inner.parent.width * self._bar_progress))
+        self._bar_rect.size = (w, dp_(8))
+        self._pct_label.text = f"{int(self._bar_progress * 100)}%"
+
+        if self._bar_progress < 0.15:
+            self._status.text = "Checking device..."
+            self._status.color = DIM
+        elif self._bar_progress < 0.35:
+            self._status.text = "Verifying license..."
+            self._status.color = ACCENT
+        elif self._bar_progress < 0.55:
+            self._status.text = "Loading modules..."
+            self._status.color = ACCENT
+        elif self._bar_progress < 0.75:
+            self._status.text = "Preparing interface..."
+            self._status.color = GREEN
+        elif self._bar_progress < 0.95:
+            self._status.text = "Almost ready..."
+            self._status.color = GREEN
+        else:
+            self._status.text = "Starting..."
+            self._status.color = GREEN
 
         if self._bar_progress < 1.0:
-            self._anim_event = Clock.schedule_once(lambda dt: self._animate(), 0.035)
+            self._anim_event = Clock.schedule_once(lambda dt: self._animate(), 0.03)
         else:
-            self._anim_event = Clock.schedule_once(lambda dt: self._animate(), 0.5)
+            self._anim_event = Clock.schedule_once(lambda dt: self._animate(), 0.4)
 
 
 class ActivationScreen(Screen):
