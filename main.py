@@ -398,36 +398,91 @@ class LoadingScreen(Screen):
             root.bind(pos=lambda i, v: setattr(self._bg, 'pos', v))
             root.bind(size=lambda i, v: setattr(self._bg, 'size', v))
 
-        center_box = BoxLayout(orientation="vertical", spacing=dp_(16), size_hint=(0.7, 0.5), pos_hint={"center_x": 0.5, "center_y": 0.5})
+        center = BoxLayout(orientation="vertical", spacing=dp_(14),
+                          size_hint=(0.75, 0.55),
+                          pos_hint={"center_x": 0.5, "center_y": 0.5})
 
-        with center_box.canvas.before:
-            Color(0.08, 0.10, 0.14, 0.8)
-            self._card = RoundedRectangle(pos=center_box.pos, size=center_box.size, radius=[dp_(20)])
-            center_box.bind(pos=lambda i, v: setattr(self._card, 'pos', v))
-            center_box.bind(size=lambda i, v: setattr(self._card, 'size', v))
+        self._glow_color = Color(0.25, 0.65, 1.0, 0.0)
+        with center.canvas.before:
+            self._glow_rect_color = self._glow_color
+            self._glow_rect = RoundedRectangle(
+                pos=(center.x - dp_(4), center.y - dp_(4)),
+                size=(center.width + dp_(8), center.height + dp_(8)),
+                radius=[dp_(24)])
+            center.bind(pos=lambda i, v: self._update_glow(center))
+            center.bind(size=lambda i, v: self._update_glow(center))
 
-        logo = Label(text="[b][color=#40A8FF]TELEGRAM[/color]\n[color=#FFFFFF]HOOKER[/color][/b]",
-                     markup=True, font_size=dp_(32), halign="center",
-                     size_hint_y=None, height=dp_(80))
-        center_box.add_widget(logo)
+        self._card_color = Color(0.08, 0.10, 0.14, 0.9)
+        with center.canvas.before:
+            Color(0.08, 0.10, 0.14, 0.9)
+            self._card = RoundedRectangle(pos=center.pos, size=center.size, radius=[dp_(20)])
+            center.bind(pos=lambda i, v: setattr(self._card, 'pos', v))
+            center.bind(size=lambda i, v: setattr(self._card, 'size', v))
 
-        ver = Label(text=f"v{APP_VERSION}", font_size=dp_(13), color=DIM,
-                    size_hint_y=None, height=dp_(20))
-        center_box.add_widget(ver)
+        center.add_widget(Label(size_hint_y=0.15))
 
-        self._dots_label = Label(text="", font_size=dp_(14), color=ACCENT,
-                                 size_hint_y=None, height=dp_(25))
-        center_box.add_widget(self._dots_label)
+        shield = Label(text="[b][color=#40A8FF]\u2699[/color][/b]",
+                       markup=True, font_size=dp_(48),
+                       size_hint_y=None, height=dp_(60))
+        center.add_widget(shield)
 
-        center_box.add_widget(Label(size_hint_y=1))
-        root.add_widget(center_box)
+        center.add_widget(Label(size_hint_y=0.05))
+
+        title = Label(text="[b][color=#40A8FF]TELEGRAM[/color] [color=#FFFFFF]HOOKER[/color][/b]",
+                      markup=True, font_size=dp_(30),
+                      size_hint_y=None, height=dp_(45))
+        center.add_widget(title)
+
+        ver = Label(text=f"v{APP_VERSION}  |  {COPYRIGHT}",
+                    font_size=dp_(11), color=DIM,
+                    size_hint_y=None, height=dp_(18))
+        center.add_widget(ver)
+
+        center.add_widget(Label(size_hint_y=0.08))
+
+        bar_bg = BoxLayout(size_hint_y=None, height=dp_(6),
+                          size_hint_x=0.8, pos_hint={"center_x": 0.5})
+        with bar_bg.canvas.before:
+            Color(0.15, 0.17, 0.22, 1)
+            self._bar_bg = RoundedRectangle(pos=bar_bg.pos, size=bar_bg.size, radius=[dp_(3)])
+            bar_bg.bind(pos=lambda i, v: setattr(self._bar_bg, 'pos', v))
+            bar_bg.bind(size=lambda i, v: setattr(self._bar_bg, 'size', v))
+        self._bar_fill = BoxLayout()
+        with self._bar_fill.canvas.before:
+            Color(0.25, 0.65, 1.0, 1)
+            self._bar_rect = RoundedRectangle(pos=self._bar_fill.pos, size=(0, dp_(6)), radius=[dp_(3)])
+            self._bar_fill.bind(pos=lambda i, v: setattr(self._bar_rect, 'pos', v))
+        bar_bg.add_widget(self._bar_fill)
+        center.add_widget(bar_bg)
+
+        center.add_widget(Label(size_hint_y=0.04))
+
+        self._status = Label(text="Initializing...",
+                             font_size=dp_(12), color=DIM,
+                             size_hint_y=None, height=dp_(20))
+        center.add_widget(self._status)
+
+        center.add_widget(Label(size_hint_y=0.12))
+        root.add_widget(center)
         self.add_widget(root)
 
-        self._dot_count = 0
+        self._glow_alpha = 0.0
+        self._glow_dir = 1
+        self._bar_progress = 0.0
         self._anim_event = None
+        self._step = 0
+
+    def _update_glow(self, center):
+        a = self._glow_alpha
+        self._glow_rect.pos = (center.x - dp_(4), center.y - dp_(4))
+        self._glow_rect.size = (center.width + dp_(8), center.height + dp_(8))
+        self._glow_color.a = a * 0.35
 
     def on_enter(self):
-        self._dot_count = 0
+        self._glow_alpha = 0.0
+        self._glow_dir = 1
+        self._bar_progress = 0.0
+        self._step = 0
         self._animate()
 
     def on_leave(self):
@@ -437,9 +492,35 @@ class LoadingScreen(Screen):
             self._anim_event = None
 
     def _animate(self):
-        self._dot_count = (self._dot_count % 3) + 1
-        self._dots_label.text = f"Loading{'.' * self._dot_count}"
-        self._anim_event = Clock.schedule_once(lambda dt: self._animate(), 0.4)
+        self._glow_alpha += self._glow_dir * 0.06
+        if self._glow_alpha >= 1.0:
+            self._glow_alpha = 1.0
+            self._glow_dir = -1
+        elif self._glow_alpha <= 0.0:
+            self._glow_alpha = 0.0
+            self._glow_dir = 1
+
+        self._bar_progress = min(1.0, self._bar_progress + 0.035)
+        w = max(1, int(self._bar_fill.parent.width * self._bar_progress))
+        self._bar_rect.size = (w, dp_(6))
+
+        steps = [
+            (0.15, "Checking device..."),
+            (0.35, "Verifying license..."),
+            (0.55, "Loading modules..."),
+            (0.75, "Preparing interface..."),
+            (0.95, "Almost ready..."),
+            (1.0, "Starting..."),
+        ]
+        for thresh, txt in steps:
+            if self._bar_progress < thresh:
+                self._status.text = txt
+                break
+
+        if self._bar_progress < 1.0:
+            self._anim_event = Clock.schedule_once(lambda dt: self._animate(), 0.035)
+        else:
+            self._anim_event = Clock.schedule_once(lambda dt: self._animate(), 0.5)
 
 
 class ActivationScreen(Screen):
