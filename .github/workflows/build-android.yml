@@ -21,6 +21,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install encryption deps
+        run: pip install cryptography
+
+      - name: Encrypt source code
+        run: |
+          echo "[*] Encrypting main.py with AES-256-GCM..."
+          python encrypt_kivy.py
+          cp main_secure.py main.py
+          echo "[+] Source encrypted and replaced"
+
       - name: Build APK
         run: |
           buildozer android debug 2>&1 | tee build.log
@@ -45,7 +55,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: TelegramHooker-v${{ github.run_number }}
+          name: TelegramHooker-v8-${{ github.run_number }}
           path: bin/*.apk
           retention-days: 30
           if-no-files-found: warn

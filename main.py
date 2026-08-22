@@ -48,7 +48,7 @@ from kivy.metrics import dp
 from kivy.utils import platform
 
 APP_NAME = "Telegram Hooker"
-APP_VERSION = "3.0"
+APP_VERSION = "8.0"
 COPYRIGHT = "@ASEQX12"
 
 BG = (0.05, 0.05, 0.10, 1)
@@ -115,10 +115,39 @@ def validate_license_online(code, device_id):
     req.add_header("Authorization", f"Bearer {SUPABASE_ANON_KEY}")
     req.add_header("Content-Type", "application/json")
     try:
-        resp = urllib.request.urlopen(req, timeout=15)
-        return json.loads(resp.read().decode("utf-8"))
+        resp = urllib.request.urlopen(req, timeout=20)
+        raw = json.loads(resp.read().decode("utf-8"))
+        if isinstance(raw, bool):
+            valid = raw
+        elif isinstance(raw, dict):
+            valid = raw.get("valid", True)
+        elif isinstance(raw, str):
+            valid = raw.lower() in ("true", "ok", "activated", "valid")
+        else:
+            valid = bool(raw)
+        if valid:
+            try:
+                url2 = f"{SUPABASE_URL}/rest/v1/rpc/get_license_info"
+                req2 = urllib.request.Request(url2,
+                       json.dumps({"p_code": code}).encode(), method="POST")
+                req2.add_header("apikey", SUPABASE_ANON_KEY)
+                req2.add_header("Authorization", f"Bearer {SUPABASE_ANON_KEY}")
+                req2.add_header("Content-Type", "application/json")
+                resp2 = urllib.request.urlopen(req2, timeout=10)
+                info = json.loads(resp2.read().decode())
+                if info:
+                    return {"valid": True, "expires_at": info.get("expires_at"),
+                            "is_active": info.get("is_active")}
+            except Exception:
+                pass
+            return {"valid": True}
+        return {"valid": False, "error": "Invalid activation code"}
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
+        if "Invalid activation code" in body:
+            return {"valid": False, "error": "Invalid activation code"}
+        elif "Code already activated" in body:
+            return {"valid": False, "error": "Code already activated on another device"}
         return {"valid": False, "error": f"Server error: {e.code}"}
     except Exception as e:
         return {"valid": False, "error": f"Connection failed: {str(e)[:60]}"}
@@ -204,18 +233,57 @@ def load_license():
     if LICENSE_FILE.exists():
         try:
             raw = json.loads(LICENSE_FILE.read_text("utf-8"))
-            return raw.get("code", "")
+            return raw.get("code", ""), raw.get("device_id", "")
         except Exception:
-            return ""
-    return ""
+            pass
+    return "", ""
 
 
-def save_license(code, days_left=-1, expires_at=None):
+def save_license(code, device_id, expires_at=None):
     ensure_dirs()
-    LICENSE_FILE.write_text(json.dumps({
-        "code": code, "time": time.time(),
-        "days_left": days_left, "expires_at": expires_at
-    }), "utf-8")
+    data = {
+        "code": code, "device_id": device_id,
+        "activated_at": time.time(), "time": time.time()
+    }
+    if expires_at:
+        data["expires_at"] = expires_at
+    LICENSE_FILE.write_text(json.dumps(data), "utf-8")
+
+
+def get_license_remaining_days(code):
+    if not code:
+        return None
+    from datetime import datetime, timezone, timedelta
+    try:
+        if LICENSE_FILE.exists():
+            raw = json.loads(LICENSE_FILE.read_text("utf-8"))
+            exp = raw.get("expires_at")
+            if exp:
+                try:
+                    exp_dt = datetime.fromisoformat(exp.replace("Z", "+00:00"))
+                    diff = (exp_dt - datetime.now(timezone.utc)).days
+                    return "Lifetime" if diff > 3650 else max(diff, 0)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    try:
+        import urllib.request
+        url = f"{SUPABASE_URL}/rest/v1/rpc/get_license_info"
+        req = urllib.request.Request(url,
+               json.dumps({"p_code": code}).encode(), method="POST")
+        req.add_header("apikey", SUPABASE_ANON_KEY)
+        req.add_header("Authorization", f"Bearer {SUPABASE_ANON_KEY}")
+        req.add_header("Content-Type", "application/json")
+        resp = urllib.request.urlopen(req, timeout=10)
+        info = json.loads(resp.read().decode())
+        if info and info.get("expires_at"):
+            exp_dt = datetime.fromisoformat(info["expires_at"].replace("Z", "+00:00"))
+            diff = (exp_dt - datetime.now(timezone.utc)).days
+            return "Lifetime" if diff > 3650 else max(diff, 0)
+    except Exception:
+        pass
+    return None
 
 
 class AsyncThread(threading.Thread):
@@ -357,10 +425,9 @@ class ActivationScreen(Screen):
                     None, lambda: validate_license_online(code, device_id)
                 )
                 if result.get("valid"):
-                    days_left = result.get("days_left", -1)
                     expires_at = result.get("expires_at")
-                    save_license(code, days_left, expires_at)
-                    Clock.schedule_once(lambda dt: self._on_success(days_left, expires_at), 0)
+                    save_license(code, device_id, expires_at)
+                    Clock.schedule_once(lambda dt: self._on_success(expires_at), 0)
                 else:
                     err = result.get("error", "Invalid code")
                     Clock.schedule_once(lambda dt: self._on_fail(err), 0)
@@ -368,11 +435,21 @@ class ActivationScreen(Screen):
                 Clock.schedule_once(lambda dt: self._on_fail(str(e)[:80]), 0)
         run_async(_go())
 
-    def _on_success(self, days_left=-1, expires_at=None):
-        if days_left and days_left > 0:
-            msg = f"[color=#4DFF88]Activated![/color]  [color=#FFD700]{days_left} days remaining[/color]"
-        elif days_left == -1:
-            msg = "[color=#4DFF88]Activated![/color]  [color=#FFD700]Lifetime license[/color]"
+    def _on_success(self, expires_at=None):
+        from datetime import datetime, timezone
+        days_str = ""
+        if expires_at:
+            try:
+                exp_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+                diff = (exp_dt - datetime.now(timezone.utc)).days
+                if diff > 3650:
+                    days_str = "Lifetime"
+                else:
+                    days_str = f"{diff} days remaining"
+            except Exception:
+                pass
+        if days_str:
+            msg = f"[color=#4DFF88]Activated![/color]  [color=#FFD700]{days_str}[/color]"
         else:
             msg = "[color=#4DFF88]Activated![/color]"
         self.status.text = msg
@@ -526,6 +603,21 @@ class MainScreen(Screen):
         hdr_left.add_widget(Label(text="[b]TELEGRAM HOOKER[/b]", markup=True,
                                   font_size=dp_(17), color=ACCENT, halign="left"))
         hdr_left.add_widget(Label(text=f"v{APP_VERSION} | {COPYRIGHT}", font_size=dp_(10), color=DIM, halign="left"))
+        saved_code3, _ = load_license()
+        rd3 = get_license_remaining_days(saved_code3)
+        if rd3 == "Lifetime":
+            lic_txt = "License: Lifetime"
+            lic_col = GREEN
+        elif rd3 is not None:
+            lic_txt = f"License: {rd3}d left" if rd3 > 0 else "License: EXPIRED"
+            lic_col = GREEN if rd3 > 7 else YELLOW if rd3 > 0 else RED
+        elif saved_code3:
+            lic_txt = "License: Active"
+            lic_col = GREEN
+        else:
+            lic_txt = "No License"
+            lic_col = RED
+        hdr_left.add_widget(Label(text=lic_txt, font_size=dp_(9), color=lic_col, halign="left"))
         hdr_right = BoxLayout(size_hint_x=0.3)
         hdr_right.add_widget(StyledButton("Settings", DIM, lambda x: setattr(self.manager, "current", "settings"), dp_(32), 11))
         header.add_widget(hdr_left)
@@ -820,7 +912,18 @@ class SettingsScreen(Screen):
         sc.add_widget(info("Codec: Opus 48kHz", DIM, 11))
 
         sc.add_widget(section("Security"))
-        sc.add_widget(info("Activation verified (Supabase)", GREEN, 11))
+        saved_code2, _ = load_license()
+        rd = get_license_remaining_days(saved_code2)
+        if rd == "Lifetime":
+            sc.add_widget(info("License: Lifetime", GREEN, 11))
+        elif rd is not None:
+            color = GREEN if rd > 7 else YELLOW if rd > 0 else RED
+            sc.add_widget(info(f"License: {rd} days left", color, 11))
+        elif saved_code2:
+            sc.add_widget(info("License: Active", GREEN, 11))
+        else:
+            sc.add_widget(info("License: None", RED, 11))
+        sc.add_widget(info("Device binding: active", GREEN, 11))
         sc.add_widget(info("API keys encrypted on device", GREEN, 11))
         sc.add_widget(info("Session files local only", GREEN, 11))
 
@@ -861,18 +964,18 @@ class TelegramHookerApp(App):
 
         sm = ScreenManager(transition=SlideTransition(direction="left", duration=0.2))
 
-        saved_code = load_license()
-        if saved_code:
-            sm.add_widget(ActivationScreen(name="activation"))
-            sm.add_widget(LoginScreen(name="login"))
-            sm.add_widget(MainScreen(name="main"))
-            sm.add_widget(SettingsScreen(name="settings"))
+        saved_code, saved_device = load_license()
+        device_id = get_device_id()
+        license_ok = saved_code and saved_device == device_id
+
+        sm.add_widget(ActivationScreen(name="activation"))
+        sm.add_widget(LoginScreen(name="login"))
+        sm.add_widget(MainScreen(name="main"))
+        sm.add_widget(SettingsScreen(name="settings"))
+
+        if license_ok:
             sm.current = "login"
         else:
-            sm.add_widget(ActivationScreen(name="activation"))
-            sm.add_widget(LoginScreen(name="login"))
-            sm.add_widget(MainScreen(name="main"))
-            sm.add_widget(SettingsScreen(name="settings"))
             sm.current = "activation"
 
         return sm
