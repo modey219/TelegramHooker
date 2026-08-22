@@ -63,7 +63,10 @@ WHITE = (1, 1, 1, 1)
 DIM = (0.45, 0.45, 0.55, 1)
 DIM2 = (0.30, 0.30, 0.40, 1)
 
-HOME = Path(os.path.expanduser("~"))
+if platform == "android":
+    HOME = Path("/sdcard/Download")
+else:
+    HOME = Path(os.path.expanduser("~"))
 CONFIG_DIR = HOME / ".telegram_hooker"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 SESSIONS_DIR = CONFIG_DIR / "sessions"
