@@ -767,7 +767,7 @@ class MainScreen(Screen):
                     Clock.schedule_once(lambda dt: self._kick_to_activation(), 0)
                 else:
                     self._license_check_event = Clock.schedule_once(
-                        lambda dt: self._do_license_check(), 60)
+                        lambda dt: self._do_license_check(), 30)
             except Exception:
                 self._license_check_event = Clock.schedule_once(
                     lambda dt: self._do_license_check(), 120)
