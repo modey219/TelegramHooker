@@ -347,7 +347,7 @@ class StyledInput(TextInput):
         )
 
 
-def draw_card(w):
+def draw_card(w, *args):
     w.canvas.before.clear()
     with w.canvas.before:
         Color(*CARD)
