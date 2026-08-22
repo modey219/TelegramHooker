@@ -66,7 +66,20 @@ DIM = (0.45, 0.45, 0.55, 1)
 DIM2 = (0.30, 0.30, 0.40, 1)
 
 if platform == "android":
-    HOME = Path("/sdcard/Download")
+    try:
+        from android.storage import app_storage_path
+        HOME = Path(app_storage_path())
+    except Exception:
+        HOME = Path(os.path.join(os.path.expanduser("~"), ".telegram_hooker"))
+    try:
+        from android.permissions import request_permissions, Permission
+        request_permissions([
+            Permission.INTERNET,
+            Permission.RECORD_AUDIO,
+            Permission.MODIFY_AUDIO_SETTINGS,
+        ])
+    except Exception:
+        pass
 else:
     HOME = Path(os.path.expanduser("~"))
 CONFIG_DIR = HOME / ".telegram_hooker"
@@ -77,20 +90,6 @@ LICENSE_FILE = CONFIG_DIR / ".license"
 
 SUPABASE_URL = "https://wsvvxmsgarpwbjbbskar.supabase.co"
 SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndzdnZ4bXNnYXJwd2JqYmJza2FyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNDIyNTMsImV4cCI6MjEwMjgxODI1M30.Ds2Xi3Q5P6HIF4mG2TrsLQlqxeww80V8LHWzt9fQRA8"
-
-if platform == "android":
-    try:
-        from android.permissions import request_permissions, Permission
-        request_permissions([
-            Permission.INTERNET,
-            Permission.RECORD_AUDIO,
-            Permission.MODIFY_AUDIO_SETTINGS,
-            Permission.WRITE_EXTERNAL_STORAGE,
-            Permission.READ_EXTERNAL_STORAGE,
-        ])
-    except Exception:
-        pass
-
 
 def get_device_id():
     try:
