@@ -704,7 +704,7 @@ class LoginScreen(Screen):
                     raise Exception("Verification code required - use RESTORE SESSION")
                 app = Client(str(SESSIONS_DIR / "session_temp"),
                              api_id=int(ai), api_hash=ah, phone_number=ph,
-                             phone_code_callback=_no_stdin)
+                             phone_code=_no_stdin)
                 await app.start()
                 me = await app.get_me()
                 await app.stop()
@@ -944,7 +944,7 @@ class MainScreen(Screen):
             raise Exception("Code required - session needs re-authorization")
         return Client(str(SESSIONS_DIR / sessions[-1]),
                       api_id=int(cfg["api_id"]), api_hash=cfg["api_hash"],
-                      phone_code_callback=_no_stdin)
+                      phone_code=_no_stdin)
 
     def do_join(self, *a):
         target = self.target_input.text.strip()
