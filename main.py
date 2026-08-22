@@ -988,6 +988,8 @@ class SettingsScreen(Screen):
 class TelegramHookerApp(App):
     def build(self):
         self.title = APP_NAME
+        from kivy.core.window import Window
+        Window.clearcolor = (0.04, 0.06, 0.08, 1)
         try:
             icon_path = Path(os.path.dirname(os.path.abspath(__file__))) / "icon.png"
             if icon_path.exists():
