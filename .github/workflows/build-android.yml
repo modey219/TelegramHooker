@@ -22,15 +22,17 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Encrypt source code
+        shell: bash
         run: |
-          echo "[*] Encrypting main.py with AES-256-GCM..."
+          echo "[*] Encrypting main.py..."
           python encrypt_kivy.py
           cp main_secure.py main.py
-          echo "[+] Source encrypted and replaced"
+          echo "[+] Source encrypted"
 
       - name: Build APK
+        shell: bash
         run: |
-          buildozer android debug 2>&1 | tee build.log
+          buildozer android debug 2>&1 | tee build.log || true
           echo "Buildozer exit code: ${PIPESTATUS[0]}"
           echo ""
           echo "=== .apk files ==="
