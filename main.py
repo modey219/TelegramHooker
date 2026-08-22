@@ -47,6 +47,8 @@ from kivy.graphics import Color, RoundedRectangle
 from kivy.metrics import dp
 from kivy.utils import platform
 
+Window.clearcolor = (0.05, 0.05, 0.10, 1)
+
 APP_NAME = "Telegram Hooker"
 APP_VERSION = "8.0"
 COPYRIGHT = "@ASEQX12"
@@ -109,6 +111,28 @@ def get_device_id():
         return hashlib.sha256(str(uuid.getnode()).encode()).hexdigest()[:32]
 
 
+def _get_ssl_context():
+    import ssl
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        pass
+    try:
+        return ssl.create_default_context()
+    except Exception:
+        pass
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
+
+
+def _urlopen(req, timeout=20):
+    import urllib.request
+    return urllib.request.urlopen(req, timeout=timeout, context=_get_ssl_context())
+
+
 def validate_license_online(code, device_id):
     import urllib.request, urllib.error
     url = f"{SUPABASE_URL}/rest/v1/rpc/validate_license"
@@ -118,7 +142,7 @@ def validate_license_online(code, device_id):
     req.add_header("Authorization", f"Bearer {SUPABASE_ANON_KEY}")
     req.add_header("Content-Type", "application/json")
     try:
-        resp = urllib.request.urlopen(req, timeout=20)
+        resp = _urlopen(req, timeout=20)
         raw = json.loads(resp.read().decode("utf-8"))
         if isinstance(raw, bool):
             valid = raw
@@ -136,7 +160,7 @@ def validate_license_online(code, device_id):
                 req2.add_header("apikey", SUPABASE_ANON_KEY)
                 req2.add_header("Authorization", f"Bearer {SUPABASE_ANON_KEY}")
                 req2.add_header("Content-Type", "application/json")
-                resp2 = urllib.request.urlopen(req2, timeout=10)
+                resp2 = _urlopen(req2, timeout=10)
                 info = json.loads(resp2.read().decode())
                 if info:
                     return {"valid": True, "expires_at": info.get("expires_at"),
@@ -152,9 +176,11 @@ def validate_license_online(code, device_id):
             return {"valid": False, "error": "Invalid activation code"}
         elif "Code already activated" in body:
             return {"valid": False, "error": "Code already activated on another device"}
+        elif "Device limit" in body:
+            return {"valid": False, "error": "Device limit reached (1 device only)"}
         return {"valid": False, "error": f"Server error: {e.code}"}
     except Exception as e:
-        return {"valid": False, "error": f"Connection failed: {str(e)[:60]}"}
+        return {"valid": False, "error": f"Connection failed: {str(e)[:80]}"}
 
 
 class Cipher:
@@ -422,12 +448,10 @@ class ActivationScreen(Screen):
         Clock.schedule_once(lambda dt: self._validate(code), 0.1)
 
     def _validate(self, code):
-        async def _go():
+        def _go():
             try:
                 device_id = get_device_id()
-                result = await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: validate_license_online(code, device_id)
-                )
+                result = validate_license_online(code, device_id)
                 if result.get("valid"):
                     expires_at = result.get("expires_at")
                     save_license(code, device_id, expires_at)
@@ -436,8 +460,9 @@ class ActivationScreen(Screen):
                     err = result.get("error", "Invalid code")
                     Clock.schedule_once(lambda dt: self._on_fail(err), 0)
             except Exception as e:
+                _write_crash(traceback.format_exc())
                 Clock.schedule_once(lambda dt: self._on_fail(str(e)[:80]), 0)
-        run_async(_go())
+        threading.Thread(target=_go, daemon=True).start()
 
     def _on_success(self, expires_at=None):
         from datetime import datetime, timezone
