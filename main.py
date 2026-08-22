@@ -35,7 +35,7 @@ except ImportError:
     pass
 
 from kivy.app import App
-from kivy.uix.screenmanager import ScreenManager, SlideTransition
+from kivy.uix.screenmanager import ScreenManager, Screen, SlideTransition
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
