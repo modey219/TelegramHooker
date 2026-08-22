@@ -144,7 +144,8 @@ def validate_license_online(code, device_id):
             except Exception:
                 pass
             return {"valid": True}
-        return {"valid": False, "error": "Invalid activation code"}
+        err_msg = raw.get("error", "Invalid activation code") if isinstance(raw, dict) else "Invalid activation code"
+        return {"valid": False, "error": err_msg}
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
         if "Invalid activation code" in body:
