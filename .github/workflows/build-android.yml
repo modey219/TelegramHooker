@@ -21,9 +21,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install encryption deps
-        run: pip install cryptography
-
       - name: Encrypt source code
         run: |
           echo "[*] Encrypting main.py with AES-256-GCM..."

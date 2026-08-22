@@ -33,3 +33,6 @@ Thumbs.db
 *.session
 *.session-journal
 config.json
+
+# Encrypted build artifacts
+main_secure.py
